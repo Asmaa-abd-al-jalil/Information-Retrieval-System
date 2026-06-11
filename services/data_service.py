@@ -1,19 +1,21 @@
 import os
+import ir_datasets
+from services.preprocessing_service import preprocess_text
+
+# إعدادات البيئة
 os.environ["PYTHONUTF8"] = "1"
 os.environ["IR_DATASETS_TMP"] = r"C:\Users\MissanAlrifai\ir_tmp"
 os.environ["IR_DATASETS_HOME"] = r"C:\Users\MissanAlrifai\.ir_datasets"
-
-# إنشاء المجلد إذا ما موجود
 os.makedirs(r"C:\Users\MissanAlrifai\ir_tmp", exist_ok=True)
 
-import ir_datasets
+# الـ dataset المعتمد
+DATASET_ID = "msmarco-passage/trec-dl-2019"
 
 SUPPORTED_DATASETS = {
-    "msmarco-passage": "msmarco-passage/trec-dl-2019",
-    "fever":           "beir/fever/test"
+    "msmarco-passage": DATASET_ID
 }
 
-def get_dataset(ds_id: str):
+def get_dataset(ds_id: str = DATASET_ID):
     return ir_datasets.load(ds_id)
 
 def docs_iter(dataset):
@@ -27,3 +29,6 @@ def qrels_iter(dataset):
 
 def count_documents(dataset) -> int:
     return dataset.docs_count()
+
+def get_processed_doc_text(doc):
+    return preprocess_text(doc.text)
