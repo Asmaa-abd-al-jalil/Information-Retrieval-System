@@ -1,25 +1,28 @@
 import re
+import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 
-# يجب التأكد من تحميل مكتبة nltk: 
-# nltk.download('stopwords')
+# تحميل الموارد اللازمة
+nltk.download('stopwords')
 
+# إعداد الأدوات
 stemmer = PorterStemmer()
 stop_words = set(stopwords.words('english'))
 
-def clean_text(text):
+def preprocess_text(text):
+    """دالة لمعالجة النصوص (Normalization + Tokenization + Stopwords + Stemming)"""
     if not isinstance(text, str):
         return ""
     
-    # 1. تحويل لأحرف صغيرة
+    # 1. Normalization: تحويل لأحرف صغيرة وإزالة الرموز
     text = text.lower()
+    text = re.sub(r'[^a-z0-9\s]', '', text)
     
-    # 2. إزالة الرموز والحروف غير الأبجدية
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    
-    # 3. التقسيم (Tokenization) وإزالة الكلمات الشائعة (Stopwords) والـ Stemming
+    # 2. Tokenization: تقسيم النص
     tokens = text.split()
-    processed_tokens = [stemmer.stem(word) for word in tokens if word not in stop_words]
     
-    return " ".join(processed_tokens)
+    # 3. Stopwords & Stemming
+    processed = [stemmer.stem(word) for word in tokens if word not in stop_words]
+    
+    return " ".join(processed)
