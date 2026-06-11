@@ -71,29 +71,3 @@ if __name__ == "__main__":
     main()
 
 
-# .........................
-
-
-
-
-
-
-# from services.data_service import get_processed_doc_text
-
-# def main():
-#     print("🚀 بدء اختبار المعالجة على جملة مخصصة...")
-    
-#     # ضعي أي جملة تريدينها هنا للتجربة
-#     my_test_sentence = "The researchers were studying the efFFfects of Information Retrieval!"
-    
-#     print(f"\n--- الجملة الأصلية ---")
-#     print(my_test_sentence)
-    
-#     print(f"\n--- النتيجة بعد المعالجة ---")
-#     processed = get_processed_doc_text(type("obj", (object,), {"text": my_test_sentence})())
-#     print(processed)
-    
-#     print("\n✅ انتهى الاختبار.")
-
-# if __name__ == "__main__":
-#     main()
