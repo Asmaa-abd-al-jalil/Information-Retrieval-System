@@ -69,11 +69,15 @@ def search(query: str, model: str = "tfidf", top_k: int = 10,
         )
 
     elif model == "hybrid_serial":
-        if not doc_texts:
-            raise ValueError("❌ لازم تعطي doc_texts عند استخدام hybrid_serial")
-        results = hybrid_serial(
-            query_text, doc_texts, top_k=top_k, k1=k1, b=b
-        )
+     if not doc_texts:
+        raise ValueError("❌ لازم تعطي doc_texts عند استخدام hybrid_serial")
+     results = hybrid_serial(
+        query_text,
+        doc_texts,
+        top_k=top_k,
+        k1=k1, b=b,
+        original_query=processed_query['original']
+    )
 
     elif model == "hybrid_parallel":
         if not doc_texts:

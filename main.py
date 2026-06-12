@@ -195,10 +195,10 @@ def main():
    #run_preprocessing_test()
    # run_preprocessing_test()
    #run_indexing()
-    run_retrieval_test()
+   # run_retrieval_test()
    # run_embedding_test()
-   # run_hybrid_test()
-   # run_query_test()
+    run_hybrid_test()
+    run_query_test()
     print("\n" + "-" * 50)
     print("🏁 انتهت جميع المراحل بنجاح.  ")
 

@@ -121,33 +121,37 @@ def compute_embedding_scores(query: str, doc_texts: dict, top_k: int = 10) -> li
     return ranked[:top_k]
 
 def hybrid_serial(query: str, doc_texts: dict, top_k: int = 10,
-                  k1: float = 1.5, b: float = 0.75) -> list:
-    """
-    Hybrid Serial: TF-IDF → BM25 → Embedding بالتسلسل
-    كل مرحلة بتضيّق النتائج للمرحلة الجاية
-    """
+                  k1: float = 1.5, b: float = 0.75,
+                  original_query: str = None) -> list:
+    
     inverted_index, doc_lengths, doc_count = load_index()
-
-    # المرحلة 1: TF-IDF - خذ أفضل 100
+    
+    # المرحلة 1: TF-IDF بالنص المعالج
     print("  🔄 المرحلة 1: TF-IDF...")
-    tfidf_results = compute_tfidf_scores(query, inverted_index, doc_lengths, doc_count)
+    tfidf_results = compute_tfidf_scores(
+        query, inverted_index, doc_lengths, doc_count
+    )
     top_100_ids = set(doc_id for doc_id, _ in tfidf_results[:100])
 
-    # المرحلة 2: BM25 - على نتائج TF-IDF فقط
+    # المرحلة 2: BM25 بالنص المعالج
     print("  🔄 المرحلة 2: BM25...")
-    bm25_results = compute_bm25_scores(query, inverted_index, doc_lengths, doc_count, k1=k1, b=b)
-    top_50 = [(doc_id, score) for doc_id, score in bm25_results if doc_id in top_100_ids][:50]
+    bm25_results = compute_bm25_scores(
+        query, inverted_index, doc_lengths, doc_count, k1=k1, b=b
+    )
+    top_50 = [(doc_id, score) for doc_id, score in bm25_results 
+              if doc_id in top_100_ids][:50]
     top_50_ids = set(doc_id for doc_id, _ in top_50)
 
-    # المرحلة 3: Embedding - على نتائج BM25 فقط
+    # المرحلة 3: Embedding بالنص الأصلي
     print("  🔄 المرحلة 3: Embedding...")
-    filtered_texts = {doc_id: doc_texts[doc_id] for doc_id in top_50_ids if doc_id in doc_texts}
+    embed_query = original_query if original_query else query
+    filtered_texts = {doc_id: doc_texts[doc_id] 
+                     for doc_id in top_50_ids if doc_id in doc_texts}
     
     if not filtered_texts:
         return top_50[:top_k]
     
-    final_results = compute_embedding_scores(query, filtered_texts, top_k=top_k)
-    return final_results
+    return compute_embedding_scores(embed_query, filtered_texts, top_k=top_k)
 
 
 def hybrid_parallel(query: str, doc_texts: dict, top_k: int = 10,
