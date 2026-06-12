@@ -254,9 +254,13 @@ def _weighted_sum_fusion_4(r1, r2, r3, r4, weights: dict, top_k: int) -> list:
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
 
 def train_word2vec(dataset, max_docs: int = None):
-    """تدريب نموذج Word2Vec على الـ dataset"""
     global _word2vec_model
     print("🔄 جاري تدريب Word2Vec...")
+    
+    # إذا موجود على الـ disk حمّله مباشرة
+    if os.path.exists("data/word2vec.model"):
+        load_word2vec()
+        return _word2vec_model
     
     sentences = []
     for i, doc in enumerate(dataset.docs_iter()):
@@ -274,6 +278,9 @@ def train_word2vec(dataset, max_docs: int = None):
         workers=4,
         epochs=5
     )
+    
+    # حفظ تلقائي بعد التدريب
+    save_word2vec()
     print(f"✅ تم تدريب Word2Vec على {len(sentences):,} وثيقة")
     return _word2vec_model
 
@@ -354,3 +361,19 @@ def _weighted_sum_fusion(results1, results2, results3, weights: dict, top_k: int
 
     ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     return ranked[:top_k]
+# حفظ ال Word2Vec على الdisk
+def save_word2vec(path: str = "data/word2vec.model"):
+    """حفظ نموذج Word2Vec على الـ disk"""
+    model = get_word2vec_model()
+    os.makedirs("data", exist_ok=True)
+    model.save(path)
+    print(f"✅ تم حفظ Word2Vec: {path}")
+
+def load_word2vec(path: str = "data/word2vec.model"):
+    """تحميل نموذج Word2Vec من الـ disk"""
+    global _word2vec_model
+    if os.path.exists(path):
+        _word2vec_model = Word2Vec.load(path)
+        print(f"✅ تم تحميل Word2Vec من الـ disk")
+    else:
+        raise FileNotFoundError("❌ ما في نموذج محفوظ، شغّل train_word2vec أولاً")

@@ -207,17 +207,23 @@ def run_database_test():
 
 def main():
     print("✨ بدء نظام استرجاع المعلومات - IR System")
-    
+    from services.data_service import get_dataset
+    from services.retrieval_service import train_word2vec
    # تحكم بالمراحل هنا: يمكنك تعطيل أي مرحلة بوضع # قبلها
    # run_data_validation()
    #run_preprocessing_test()
    # run_preprocessing_test()
     run_indexing()
+
+    ds = get_dataset()
+    train_word2vec(ds, max_docs=1000)
+
    # run_retrieval_test()
    # run_embedding_test()
    # run_hybrid_test()
    # run_query_test()
     run_database_test()
+    
     print("\n" + "-" * 50)
     print("🏁 انتهت جميع المراحل بنجاح.  ")
 
