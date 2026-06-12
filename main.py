@@ -187,6 +187,24 @@ def run_query_test():
         for doc_id, score in response['results']:
             print(f"  {doc_id}: {score:.4f}")
 
+def run_database_test():
+    print("\n🚀 اختبار الـ Database")
+    print("-" * 50)
+    
+    from services.database_service import get_document_count
+    from services.retrieval_service import retrieve_with_text
+    
+    print(f"📊 عدد الوثائق بالـ Database: {get_document_count():,}")
+    
+    query = "atomic bomb manhattan project"
+    results = retrieve_with_text(query, model="tfidf", top_k=3)
+    
+    print(f"\n🔍 نتائج البحث عن: {query}")
+    for r in results:
+        print(f"\n  📄 Doc ID: {r['doc_id']}")
+        print(f"  ⭐ Score : {r['score']}")
+        print(f"  📝 Text  : {r['raw_text']}...")
+
 def main():
     print("✨ بدء نظام استرجاع المعلومات - IR System")
     
@@ -194,11 +212,12 @@ def main():
    # run_data_validation()
    #run_preprocessing_test()
    # run_preprocessing_test()
-   #run_indexing()
+    run_indexing()
    # run_retrieval_test()
    # run_embedding_test()
-    run_hybrid_test()
-    run_query_test()
+   # run_hybrid_test()
+   # run_query_test()
+    run_database_test()
     print("\n" + "-" * 50)
     print("🏁 انتهت جميع المراحل بنجاح.  ")
 

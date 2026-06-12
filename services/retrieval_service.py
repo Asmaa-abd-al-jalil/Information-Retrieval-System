@@ -6,6 +6,7 @@ from collections import defaultdict
 from services.preprocessing_service import preprocess_text
 from services.index_service import load_index
 from sentence_transformers import SentenceTransformer
+from services.database_service import get_documents_by_ids
 
 # متغير عالمي للنموذج
 _word2vec_model = None
@@ -79,6 +80,36 @@ def retrieve(query: str, model: str = "tfidf", top_k: int = 10,
         return compute_embedding_scores(query, doc_texts, top_k=top_k)
     else:
         raise ValueError(f"❌ نموذج غير معرف: {model}")
+
+def retrieve_with_text(query: str, model: str = "tfidf", top_k: int = 10,
+                       k1: float = 1.5, b: float = 0.75,
+                       doc_texts: dict = None,
+                       fusion_method: str = "rrf") -> list:
+    """
+    نفس الاسترجاع بس بيرجع النص الأصلي من الـ Database
+    """
+    # جيب الـ IDs
+    from services.query_service import search
+    response = search(query, model=model, top_k=top_k,
+                     k1=k1, b=b, doc_texts=doc_texts,
+                     fusion_method=fusion_method)
+    
+    results = response['results']
+    doc_ids = [doc_id for doc_id, _ in results]
+    
+    # اقرأ النص الأصلي من الـ Database
+    raw_texts = get_documents_by_ids(doc_ids)
+    
+    # ادمج النتائج مع النص الأصلي
+    final_results = []
+    for doc_id, score in results:
+        final_results.append({
+            "doc_id":   doc_id,
+            "score":    round(score, 4),
+            "raw_text": raw_texts.get(doc_id, "")[:200]  # أول 200 حرف
+        })
+    
+    return final_results
 
 
 # تحميل النموذج مرة وحدة بس

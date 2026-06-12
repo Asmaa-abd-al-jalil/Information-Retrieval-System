@@ -4,6 +4,7 @@ import json
 import math
 from collections import defaultdict
 from services.preprocessing_service import preprocess_text
+from services.database_service import init_db, insert_documents
 
 # مسار حفظ الـ Index
 INDEX_DIR = "data/indexes"
@@ -141,3 +142,56 @@ def build_and_filter_index(dataset, max_docs: int = None,
     filtered_index = filter_index_terms(inverted_index, doc_count, min_df, max_df_ratio)
     save_index(filtered_index, doc_lengths, doc_count)
     return filtered_index, doc_lengths, doc_count
+
+from services.database_service import init_db, insert_documents
+
+def build_inverted_index(dataset, max_docs: int = None):
+    print("🔨 جاري بناء الـ Inverted Index...")
+    
+    # إنشاء الـ Database
+    init_db()
+    
+    inverted_index = defaultdict(dict)
+    doc_lengths = {}
+    doc_count = 0
+    raw_docs_batch = {}      # ← batch للتخزين بالـ Database
+    BATCH_SIZE = 1000        # ← حفظ كل 1000 وثيقة
+
+    for i, doc in enumerate(dataset.docs_iter()):
+        if max_docs and i >= max_docs:
+            break
+
+        result = preprocess_text(doc.text)
+        tokens = result['final_tokens']
+
+        if not tokens:
+            continue
+
+        tf_counts = defaultdict(int)
+        for token in tokens:
+            tf_counts[token] += 1
+
+        for token, count in tf_counts.items():
+            inverted_index[token][doc.doc_id] = count
+
+        doc_lengths[doc.doc_id] = len(tokens)
+        
+        # ← أضف Raw text للـ batch
+        raw_docs_batch[doc.doc_id] = doc.text
+        
+        doc_count += 1
+
+        # ← احفظ كل BATCH_SIZE وثيقة
+        if doc_count % BATCH_SIZE == 0:
+            insert_documents(raw_docs_batch)
+            raw_docs_batch = {}
+            print(f"  📄 تمت معالجة {doc_count:,} وثيقة...")
+
+    # ← احفظ الباقي
+    if raw_docs_batch:
+        insert_documents(raw_docs_batch)
+
+    print(f"✅ تم بناء الـ Index لـ {doc_count:,} وثيقة")
+    print(f"📚 عدد المصطلحات الفريدة: {len(inverted_index):,}")
+
+    return dict(inverted_index), doc_lengths, doc_count
