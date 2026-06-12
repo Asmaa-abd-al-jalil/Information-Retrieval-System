@@ -1,10 +1,14 @@
 import os
 import math
 import numpy as np
+from gensim.models import Word2Vec
 from collections import defaultdict
 from services.preprocessing_service import preprocess_text
 from services.index_service import load_index
 from sentence_transformers import SentenceTransformer
+
+# متغير عالمي للنموذج
+_word2vec_model = None
 
 def compute_tfidf_scores(query: str, inverted_index: dict, doc_lengths: dict, doc_count: int) -> dict:
     """VSM TF-IDF: حساب درجات التشابه بين الاستعلام والوثائق"""
@@ -150,32 +154,124 @@ def hybrid_parallel(query: str, doc_texts: dict, top_k: int = 10,
                     fusion_method: str = "rrf",
                     weights: dict = None) -> list:
     """
-    Hybrid Parallel: TF-IDF + BM25 + Embedding بالتوازي
+    Hybrid Parallel: TF-IDF + BM25 + BERT + Word2Vec بالتوازي
     fusion_method: 'rrf' أو 'weighted_sum'
-    weights: {'tfidf': 0.3, 'bm25': 0.3, 'embedding': 0.4}
     """
     if weights is None:
-        weights = {'tfidf': 0.3, 'bm25': 0.3, 'embedding': 0.4}
+        weights = {'tfidf': 0.25, 'bm25': 0.25, 'bert': 0.25, 'word2vec': 0.25}
 
     inverted_index, doc_lengths, doc_count = load_index()
 
-    # تشغيل النماذج بالتوازي
     print("  🔄 TF-IDF...")
     tfidf_results = compute_tfidf_scores(query, inverted_index, doc_lengths, doc_count)
-    
+
     print("  🔄 BM25...")
     bm25_results = compute_bm25_scores(query, inverted_index, doc_lengths, doc_count, k1=k1, b=b)
-    
-    print("  🔄 Embedding...")
-    embedding_results = compute_embedding_scores(query, doc_texts, top_k=len(doc_texts))
+
+    print("  🔄 BERT Embedding...")
+    bert_results = compute_embedding_scores(query, doc_texts, top_k=len(doc_texts))
+
+    print("  🔄 Word2Vec Embedding...")
+    w2v_results = compute_word2vec_scores(query, doc_texts, top_k=len(doc_texts))
 
     if fusion_method == "rrf":
-        return _reciprocal_rank_fusion(tfidf_results, bm25_results, embedding_results, top_k)
+        return _reciprocal_rank_fusion_4(tfidf_results, bm25_results, bert_results, w2v_results, top_k)
     elif fusion_method == "weighted_sum":
-        return _weighted_sum_fusion(tfidf_results, bm25_results, embedding_results, weights, top_k)
+        return _weighted_sum_fusion_4(tfidf_results, bm25_results, bert_results, w2v_results, weights, top_k)
     else:
         raise ValueError(f"❌ fusion method غير معرف: {fusion_method}")
 
+
+def _reciprocal_rank_fusion_4(r1, r2, r3, r4, top_k: int, k: int = 60) -> list:
+    """RRF لـ 4 نماذج"""
+    scores = defaultdict(float)
+    for results in [r1, r2, r3, r4]:
+        for rank, (doc_id, _) in enumerate(results):
+            scores[doc_id] += 1 / (k + rank + 1)
+    return sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+
+
+def _weighted_sum_fusion_4(r1, r2, r3, r4, weights: dict, top_k: int) -> list:
+    """Weighted Sum لـ 4 نماذج"""
+    def normalize(results):
+        if not results:
+            return {}
+        max_s = max(s for _, s in results)
+        min_s = min(s for _, s in results)
+        diff = max_s - min_s or 1
+        return {doc_id: (score - min_s) / diff for doc_id, score in results}
+
+    n1 = normalize(r1)
+    n2 = normalize(r2)
+    n3 = normalize(r3)
+    n4 = normalize(r4)
+
+    all_docs = set(n1) | set(n2) | set(n3) | set(n4)
+    scores = {}
+    for doc_id in all_docs:
+        scores[doc_id] = (
+            weights['tfidf']    * n1.get(doc_id, 0) +
+            weights['bm25']     * n2.get(doc_id, 0) +
+            weights['bert']     * n3.get(doc_id, 0) +
+            weights['word2vec'] * n4.get(doc_id, 0)
+        )
+    return sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+
+def train_word2vec(dataset, max_docs: int = None):
+    """تدريب نموذج Word2Vec على الـ dataset"""
+    global _word2vec_model
+    print("🔄 جاري تدريب Word2Vec...")
+    
+    sentences = []
+    for i, doc in enumerate(dataset.docs_iter()):
+        if max_docs and i >= max_docs:
+            break
+        result = preprocess_text(doc.text)
+        if result['final_tokens']:
+            sentences.append(result['final_tokens'])
+    
+    _word2vec_model = Word2Vec(
+        sentences=sentences,
+        vector_size=100,
+        window=5,
+        min_count=2,
+        workers=4,
+        epochs=5
+    )
+    print(f"✅ تم تدريب Word2Vec على {len(sentences):,} وثيقة")
+    return _word2vec_model
+
+def get_word2vec_model():
+    global _word2vec_model
+    if _word2vec_model is None:
+        raise ValueError("❌ Word2Vec لسا ما تدرّب، شغّل train_word2vec أولاً")
+    return _word2vec_model
+
+def get_word2vec_vector(tokens: list) -> np.ndarray:
+    """حساب متوسط متجهات الكلمات"""
+    model = get_word2vec_model()
+    vectors = []
+    for token in tokens:
+        if token in model.wv:
+            vectors.append(model.wv[token])
+    if not vectors:
+        return np.zeros(model.vector_size)
+    return np.mean(vectors, axis=0)
+
+def compute_word2vec_scores(query: str, doc_texts: dict, top_k: int = 10) -> list:
+    """Word2Vec: حساب التشابه بين الاستعلام والوثائق"""
+    result = preprocess_text(query)
+    query_tokens = result['final_tokens']
+    query_vec = get_word2vec_vector(query_tokens)
+    
+    scores = []
+    for doc_id, text in doc_texts.items():
+        doc_result = preprocess_text(text)
+        doc_vec = get_word2vec_vector(doc_result['final_tokens'])
+        score = cosine_similarity(query_vec, doc_vec)
+        scores.append((doc_id, score))
+    
+    return sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
 
 def _reciprocal_rank_fusion(results1, results2, results3, top_k: int, k: int = 60) -> list:
     """

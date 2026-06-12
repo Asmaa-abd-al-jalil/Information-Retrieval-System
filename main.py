@@ -128,11 +128,10 @@ def run_hybrid_test():
     print("-" * 50)
     
     from services.data_service import get_dataset
-    from services.retrieval_service import hybrid_serial, hybrid_parallel
+    from services.retrieval_service import hybrid_serial, hybrid_parallel, train_word2vec
 
     query = "atomic bomb manhattan project"
     
-    # جهّز الوثائق
     ds = get_dataset()
     doc_texts = {}
     for i, doc in enumerate(ds.docs_iter()):
@@ -140,19 +139,22 @@ def run_hybrid_test():
             break
         doc_texts[doc.doc_id] = doc.text
 
+    # تدريب Word2Vec أولاً
+    train_word2vec(ds, max_docs=1000)
+
     # Serial
     print("\n--- Hybrid Serial ---")
     results = hybrid_serial(query, doc_texts, top_k=5)
     for doc_id, score in results:
         print(f"  {doc_id}: {score:.4f}")
 
-    # Parallel - RRF
+    # Parallel RRF
     print("\n--- Hybrid Parallel (RRF) ---")
     results = hybrid_parallel(query, doc_texts, top_k=5, fusion_method="rrf")
     for doc_id, score in results:
         print(f"  {doc_id}: {score:.4f}")
 
-    # Parallel - Weighted Sum
+    # Parallel Weighted Sum
     print("\n--- Hybrid Parallel (Weighted Sum) ---")
     results = hybrid_parallel(query, doc_texts, top_k=5, fusion_method="weighted_sum")
     for doc_id, score in results:
