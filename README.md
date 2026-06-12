@@ -3,15 +3,6 @@
 ## 📋 وصف المشروع
 نظام استرجاع معلومات مبني على مجموعة بيانات MS MARCO Passage.
 
-## 👥 تقسيم العمل
-| العضو | المهمة | الملف |
-|---|---|---|
-| عضو 1 | Data & Preprocessing | `services/preprocessing_service.py` |
-| عضو 2 | Indexing Service | `services/index_service.py` |
-| عضو 3 | Retrieval Service | `services/retrieval_service.py` |
-| عضو 4 | Ranking & Evaluation | `services/rank_service.py` |
-| عضو 5 | Query Refinement | `services/query_service.py` |
-| عضو 6 | API Gateway & UI | `main.py` |
 
 ## ⚙️ متطلبات التشغيل
 ```bash
