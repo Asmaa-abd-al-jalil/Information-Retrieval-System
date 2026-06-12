@@ -63,17 +63,23 @@ def run_preprocessing_test():
             print(f"  Original : {doc.text[:100]}")
             print(f"  Processed: {result['final_text'][:100]}")
             print()  
+            
 def run_indexing():
     print("\n🚀 المرحلة الثالثة: بناء الـ Index")
     print("-" * 50)
-    ds = get_dataset()
+    from services.index_service import build_and_filter_index, get_index_stats
+    from services.data_service import get_dataset
     
-    # للاختبار خذ 1000 وثيقة بس، بعدين شيلها
-    inverted_index, doc_lengths, doc_count = build_inverted_index(ds, max_docs=1000)
-    save_index(inverted_index, doc_lengths, doc_count)
+    ds = get_dataset()
+    inverted_index, doc_lengths, doc_count = build_and_filter_index(
+        ds, 
+        max_docs=1000,
+        min_df=2,
+        max_df_ratio=0.9
+    )
     
     stats = get_index_stats(inverted_index, doc_lengths, doc_count)
-    print(f"📊 إحصائيات: {stats}")   
+    print(f"📊 إحصائيات: {stats}")
 
 def run_retrieval_test():
     print("\n🚀 اختبار الاسترجاع")
@@ -117,16 +123,52 @@ def run_embedding_test():
     for doc_id, score in results:
         print(f"  {doc_id}: {score:.4f}")
 
+def run_hybrid_test():
+    print("\n🚀 اختبار Hybrid")
+    print("-" * 50)
+    
+    from services.data_service import get_dataset
+    from services.retrieval_service import hybrid_serial, hybrid_parallel
+
+    query = "atomic bomb manhattan project"
+    
+    # جهّز الوثائق
+    ds = get_dataset()
+    doc_texts = {}
+    for i, doc in enumerate(ds.docs_iter()):
+        if i >= 100:
+            break
+        doc_texts[doc.doc_id] = doc.text
+
+    # Serial
+    print("\n--- Hybrid Serial ---")
+    results = hybrid_serial(query, doc_texts, top_k=5)
+    for doc_id, score in results:
+        print(f"  {doc_id}: {score:.4f}")
+
+    # Parallel - RRF
+    print("\n--- Hybrid Parallel (RRF) ---")
+    results = hybrid_parallel(query, doc_texts, top_k=5, fusion_method="rrf")
+    for doc_id, score in results:
+        print(f"  {doc_id}: {score:.4f}")
+
+    # Parallel - Weighted Sum
+    print("\n--- Hybrid Parallel (Weighted Sum) ---")
+    results = hybrid_parallel(query, doc_texts, top_k=5, fusion_method="weighted_sum")
+    for doc_id, score in results:
+        print(f"  {doc_id}: {score:.4f}")
+
 def main():
     print("✨ بدء نظام استرجاع المعلومات - IR System")
     
-    # تحكم بالمراحل هنا: يمكنك تعطيل أي مرحلة بوضع # قبلها
+   # تحكم بالمراحل هنا: يمكنك تعطيل أي مرحلة بوضع # قبلها
    # run_data_validation()
-    #run_preprocessing_test()
+   #run_preprocessing_test()
    # run_preprocessing_test()
-   # run_indexing()
+   #run_indexing()
    # run_retrieval_test()
-    run_embedding_test()
+   # run_embedding_test()
+    run_hybrid_test()
     print("\n" + "-" * 50)
     print("🏁 انتهت جميع المراحل بنجاح.  ")
 

@@ -99,3 +99,45 @@ def get_index_stats(inverted_index, doc_lengths, doc_count):
         "unique_terms": len(inverted_index),
         "avg_doc_length": round(avg_doc_length, 2)
     }
+def filter_index_terms(inverted_index: dict, doc_count: int, 
+                        min_df: int = 2, max_df_ratio: float = 0.9) -> dict:
+    """
+    Index Terms Selection - تصفية المصطلحات
+    min_df: الحد الأدنى لعدد الوثائق (حذف النادر جداً)
+    max_df_ratio: الحد الأقصى كنسبة من الوثائق (حذف الشائع جداً)
+    """
+    print("🔍 جاري تصفية مصطلحات الـ Index...")
+    
+    max_df = int(doc_count * max_df_ratio)
+    
+    filtered = {}
+    removed_rare = 0
+    removed_common = 0
+    
+    for term, postings in inverted_index.items():
+        df = len(postings)
+        
+        if df < min_df:
+            removed_rare += 1
+            continue
+        if df > max_df:
+            removed_common += 1
+            continue
+            
+        filtered[term] = postings
+    
+    print(f"✅ المصطلحات قبل التصفية : {len(inverted_index):,}")
+    print(f"✅ المصطلحات بعد التصفية : {len(filtered):,}")
+    print(f"🗑️ محذوف (نادر جداً)    : {removed_rare:,}")
+    print(f"🗑️ محذوف (شائع جداً)    : {removed_common:,}")
+    
+    return filtered
+
+
+def build_and_filter_index(dataset, max_docs: int = None, 
+                            min_df: int = 2, max_df_ratio: float = 0.9):
+    """بناء الـ Index + تصفية المصطلحات مع بعض"""
+    inverted_index, doc_lengths, doc_count = build_inverted_index(dataset, max_docs)
+    filtered_index = filter_index_terms(inverted_index, doc_count, min_df, max_df_ratio)
+    save_index(filtered_index, doc_lengths, doc_count)
+    return filtered_index, doc_lengths, doc_count

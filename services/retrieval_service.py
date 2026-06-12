@@ -114,3 +114,111 @@ def compute_embedding_scores(query: str, doc_texts: dict, top_k: int = 10) -> li
 
     ranked = sorted(scores, key=lambda x: x[1], reverse=True)
     return ranked[:top_k]
+
+def hybrid_serial(query: str, doc_texts: dict, top_k: int = 10,
+                  k1: float = 1.5, b: float = 0.75) -> list:
+    """
+    Hybrid Serial: TF-IDF → BM25 → Embedding بالتسلسل
+    كل مرحلة بتضيّق النتائج للمرحلة الجاية
+    """
+    inverted_index, doc_lengths, doc_count = load_index()
+
+    # المرحلة 1: TF-IDF - خذ أفضل 100
+    print("  🔄 المرحلة 1: TF-IDF...")
+    tfidf_results = compute_tfidf_scores(query, inverted_index, doc_lengths, doc_count)
+    top_100_ids = set(doc_id for doc_id, _ in tfidf_results[:100])
+
+    # المرحلة 2: BM25 - على نتائج TF-IDF فقط
+    print("  🔄 المرحلة 2: BM25...")
+    bm25_results = compute_bm25_scores(query, inverted_index, doc_lengths, doc_count, k1=k1, b=b)
+    top_50 = [(doc_id, score) for doc_id, score in bm25_results if doc_id in top_100_ids][:50]
+    top_50_ids = set(doc_id for doc_id, _ in top_50)
+
+    # المرحلة 3: Embedding - على نتائج BM25 فقط
+    print("  🔄 المرحلة 3: Embedding...")
+    filtered_texts = {doc_id: doc_texts[doc_id] for doc_id in top_50_ids if doc_id in doc_texts}
+    
+    if not filtered_texts:
+        return top_50[:top_k]
+    
+    final_results = compute_embedding_scores(query, filtered_texts, top_k=top_k)
+    return final_results
+
+
+def hybrid_parallel(query: str, doc_texts: dict, top_k: int = 10,
+                    k1: float = 1.5, b: float = 0.75,
+                    fusion_method: str = "rrf",
+                    weights: dict = None) -> list:
+    """
+    Hybrid Parallel: TF-IDF + BM25 + Embedding بالتوازي
+    fusion_method: 'rrf' أو 'weighted_sum'
+    weights: {'tfidf': 0.3, 'bm25': 0.3, 'embedding': 0.4}
+    """
+    if weights is None:
+        weights = {'tfidf': 0.3, 'bm25': 0.3, 'embedding': 0.4}
+
+    inverted_index, doc_lengths, doc_count = load_index()
+
+    # تشغيل النماذج بالتوازي
+    print("  🔄 TF-IDF...")
+    tfidf_results = compute_tfidf_scores(query, inverted_index, doc_lengths, doc_count)
+    
+    print("  🔄 BM25...")
+    bm25_results = compute_bm25_scores(query, inverted_index, doc_lengths, doc_count, k1=k1, b=b)
+    
+    print("  🔄 Embedding...")
+    embedding_results = compute_embedding_scores(query, doc_texts, top_k=len(doc_texts))
+
+    if fusion_method == "rrf":
+        return _reciprocal_rank_fusion(tfidf_results, bm25_results, embedding_results, top_k)
+    elif fusion_method == "weighted_sum":
+        return _weighted_sum_fusion(tfidf_results, bm25_results, embedding_results, weights, top_k)
+    else:
+        raise ValueError(f"❌ fusion method غير معرف: {fusion_method}")
+
+
+def _reciprocal_rank_fusion(results1, results2, results3, top_k: int, k: int = 60) -> list:
+    """
+    RRF: كل وثيقة تاخذ درجة = sum(1 / (k + rank))
+    """
+    scores = defaultdict(float)
+    
+    for rank, (doc_id, _) in enumerate(results1):
+        scores[doc_id] += 1 / (k + rank + 1)
+    for rank, (doc_id, _) in enumerate(results2):
+        scores[doc_id] += 1 / (k + rank + 1)
+    for rank, (doc_id, _) in enumerate(results3):
+        scores[doc_id] += 1 / (k + rank + 1)
+
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return ranked[:top_k]
+
+
+def _weighted_sum_fusion(results1, results2, results3, weights: dict, top_k: int) -> list:
+    """
+    Weighted Sum: كل وثيقة تاخذ درجة = w1*score1 + w2*score2 + w3*score3
+    بعد normalize الدرجات
+    """
+    def normalize(results):
+        if not results:
+            return {}
+        max_score = max(s for _, s in results)
+        min_score = min(s for _, s in results)
+        diff = max_score - min_score or 1
+        return {doc_id: (score - min_score) / diff for doc_id, score in results}
+
+    norm1 = normalize(results1)
+    norm2 = normalize(results2)
+    norm3 = normalize(results3)
+
+    all_docs = set(norm1) | set(norm2) | set(norm3)
+    scores = {}
+    for doc_id in all_docs:
+        scores[doc_id] = (
+            weights['tfidf'] * norm1.get(doc_id, 0) +
+            weights['bm25'] * norm2.get(doc_id, 0) +
+            weights['embedding'] * norm3.get(doc_id, 0)
+        )
+
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return ranked[:top_k]
