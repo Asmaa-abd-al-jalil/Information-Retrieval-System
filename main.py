@@ -160,6 +160,33 @@ def run_hybrid_test():
     for doc_id, score in results:
         print(f"  {doc_id}: {score:.4f}")
 
+def run_query_test():
+    print("\n🚀 اختبار Query Processing")
+    print("-" * 50)
+    
+    from services.query_service import search
+    from services.data_service import get_dataset
+    from services.retrieval_service import train_word2vec  # ← أضف هاد
+
+    ds = get_dataset()
+    
+    # تدريب Word2Vec أولاً
+    train_word2vec(ds, max_docs=1000)  # ← أضف هاد
+    
+    doc_texts = {}
+    for i, doc in enumerate(ds.docs_iter()):
+        if i >= 100:
+            break
+        doc_texts[doc.doc_id] = doc.text
+
+    query = "atomic bomb manhattan project"
+
+    for model in ["tfidf", "bm25", "bert", "word2vec"]:
+        print(f"\n--- {model.upper()} ---")
+        response = search(query, model=model, top_k=3, doc_texts=doc_texts)
+        for doc_id, score in response['results']:
+            print(f"  {doc_id}: {score:.4f}")
+
 def main():
     print("✨ بدء نظام استرجاع المعلومات - IR System")
     
@@ -168,9 +195,10 @@ def main():
    #run_preprocessing_test()
    # run_preprocessing_test()
    #run_indexing()
-   # run_retrieval_test()
+    run_retrieval_test()
    # run_embedding_test()
-    run_hybrid_test()
+   # run_hybrid_test()
+   # run_query_test()
     print("\n" + "-" * 50)
     print("🏁 انتهت جميع المراحل بنجاح.  ")
 

@@ -37,6 +37,7 @@ def compute_tfidf_scores(query: str, inverted_index: dict, doc_lengths: dict, do
 
 def compute_bm25_scores(query: str, inverted_index: dict, doc_lengths: dict, 
                          doc_count: int, k1: float = 1.5, b: float = 0.75) -> list:
+    print(f"  📊 BM25 Parameters: k1={k1}, b={b}")
     """BM25: حساب درجات التشابه"""
     result = preprocess_text(query)
     query_tokens = result['final_tokens']
