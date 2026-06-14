@@ -3,3 +3,4 @@ __pycache__/
 .ir_datasets/
 ir_tmp/
 data/
+venv312/
