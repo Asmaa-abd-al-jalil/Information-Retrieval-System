@@ -23,15 +23,17 @@ def process_query(query: str) -> dict:
         "final_text":   result['final_text']
     }
 
-
+from services.query_refinement_service import correct_query
 def search(query: str, model: str = "tfidf", top_k: int = 10,
            k1: float = 1.5, b: float = 0.75,
            doc_texts: dict = None,
            fusion_method: str = "rrf",
            weights: dict = None) -> dict:
-    
+    refined_query = correct_query(query)
+    if refined_query != query:
+        print(f" التصحيح الإملائي: '{query}' -> '{refined_query}'")
     # معالجة الاستعلام
-    processed_query = process_query(query)
+    processed_query = process_query(refined_query)
     print(f"🔍 الاستعلام الأصلي  : {processed_query['original']}")
     print(f"🔍 الاستعلام المعالج : {processed_query['final_text']}")
 
