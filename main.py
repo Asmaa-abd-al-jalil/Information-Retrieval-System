@@ -188,22 +188,35 @@ def run_query_test():
             print(f"  {doc_id}: {score:.4f}")
 
 def run_database_test():
-    print("\n🚀 اختبار الـ Database")
+    print("\n🚀 اختبار الـ Database مع Ranking")
     print("-" * 50)
     
+    # 1. استيراد دالة الترتيب وتحميل الفهرس
     from services.database_service import get_document_count
     from services.retrieval_service import retrieve_with_text
+    from services.rank_service import rank_documents
+    from services.index_service import load_index
     
     print(f"📊 عدد الوثائق بالـ Database: {get_document_count():,}")
     
     query = "atomic bomb manhattan project"
-    results = retrieve_with_text(query, model="tfidf", top_k=3)
+    # استرجاع مبدئي (Candidates)
+    results = retrieve_with_text(query, model="tfidf", top_k=10) 
     
-    print(f"\n🔍 نتائج البحث عن: {query}")
-    for r in results:
-        print(f"\n  📄 Doc ID: {r['doc_id']}")
-        print(f"  ⭐ Score : {r['score']}")
-        print(f"  📝 Text  : {r['raw_text']}...")
+    # 2. تحميل الفهرس (للحصول على doc_lengths و doc_count اللازمين للترتيب)
+    index, doc_lengths, doc_count = load_index()
+    
+    # 3. تجهيز البيانات لدالة الترتيب
+    retrieved_doc_ids = [r['doc_id'] for r in results]
+    query_tokens = query.lower().split() # توكنز بسيطة للاختبار
+    
+    # 4. استدعاء خدمة الترتيب (Ranking Service)
+    ranked_results = rank_documents(query_tokens, {doc_id: {} for doc_id in retrieved_doc_ids}, index, doc_lengths, doc_count)
+    
+    # 5. طباعة النتائج المترتبة بـ Ranking
+    print(f"\n🔍 نتائج البحث المرتبة (Ranking) عن: {query}")
+    for doc_id, score in ranked_results[:3]: # نطبع أول 3 فقط
+        print(f" 📄 Doc ID: {doc_id} | ⭐ Ranking Score: {score:.4f}")
 
 def main():
     print("✨ بدء نظام استرجاع المعلومات - IR System")

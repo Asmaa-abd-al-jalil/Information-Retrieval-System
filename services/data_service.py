@@ -4,12 +4,17 @@ from services.preprocessing_service import preprocess_text
 
 # إعدادات البيئة
 os.environ["PYTHONUTF8"] = "1"
+current_dir = os.getcwd()
+os.environ["IR_DATASETS_TMP"] = os.path.join(current_dir, "ir_tmp")
+os.environ["IR_DATASETS_HOME"] = os.path.join(current_dir, ".ir_datasets")
+os.makedirs(os.environ["IR_DATASETS_TMP"], exist_ok=True)
+os.makedirs(os.environ["IR_DATASETS_HOME"], exist_ok=True)
 # os.environ["IR_DATASETS_TMP"] = r"C:\Users\MissanAlrifai\ir_tmp"
 # os.environ["IR_DATASETS_HOME"] = r"C:\Users\MissanAlrifai\.ir_datasets"
 # os.makedirs(r"C:\Users\MissanAlrifai\ir_tmp", exist_ok=True)
-os.environ["IR_DATASETS_TMP"] = r"C:\Users\safa\ir_tmp"
-os.environ["IR_DATASETS_HOME"] = r"C:\Users\safa\.ir_datasets"
-os.makedirs(r"C:\Users\safa\ir_tmp", exist_ok=True)
+# os.environ["IR_DATASETS_TMP"] = r"C:\Users\safa\ir_tmp"
+# os.environ["IR_DATASETS_HOME"] = r"C:\Users\safa\.ir_datasets"
+# os.makedirs(r"C:\Users\safa\ir_tmp", exist_ok=True)
 
 # الـ dataset المعتمد
 # DATASET_ID = "msmarco-passage/trec-dl-2019"
