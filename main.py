@@ -73,7 +73,7 @@ def run_indexing():
     ds = get_dataset()
     inverted_index, doc_lengths, doc_count = build_and_filter_index(
         ds, 
-        max_docs=1000,
+        max_docs=200_000,
         min_df=2,
         max_df_ratio=0.9
     )
