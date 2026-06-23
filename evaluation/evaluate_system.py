@@ -1,3 +1,6 @@
+import os
+os.environ['IR_DATASETS_HOME'] = r"D:\ir_storage"
+
 import ir_measures
 import pandas as pd
 from services.data_service import get_dataset
