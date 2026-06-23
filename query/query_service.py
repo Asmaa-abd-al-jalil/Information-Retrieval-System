@@ -23,7 +23,7 @@ def process_query(query: str) -> dict:
         "final_text":   result['final_text']
     }
 
-from services.query_refinement_service import correct_query
+from query.query_refinement_service import correct_query
 def search(query: str, model: str = "tfidf", top_k: int = 10,
            k1: float = 1.5, b: float = 0.75,
            doc_texts: dict = None,

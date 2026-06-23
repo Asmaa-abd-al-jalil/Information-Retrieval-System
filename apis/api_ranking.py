@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Body
-from services.rank_service import rank_documents
+from rank.rank_service import rank_documents
 from services.index_service import load_index
 
 app = FastAPI()

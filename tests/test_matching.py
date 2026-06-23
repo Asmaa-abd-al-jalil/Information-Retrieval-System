@@ -1,4 +1,4 @@
-from services.matching_service import rank_documents
+from rank.matching_service import rank_documents
 from services.data_service import get_dataset
 from services.retrieval_service import train_word2vec
 
