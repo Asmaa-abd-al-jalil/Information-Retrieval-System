@@ -1,6 +1,11 @@
 import os
 import sys
 import io
+
+os.environ['IR_DATASETS_HOME'] = r"D:\ir_storage"
+os.environ["PYTHONUTF8"] = "1"
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 from services.data_service import get_dataset, count_documents, SUPPORTED_DATASETS
 from services.preprocessing_service import preprocess_text
 from services.index_service import (
