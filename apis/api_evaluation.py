@@ -10,7 +10,7 @@ class EvaluationResponse(BaseModel):
 
 @app.post("/evaluate", response_model=EvaluationResponse, tags=["Evaluation"])
 def evaluate_models(
-    model: str = Query(..., description="اختر النموذج للتقييم: tfidf, bm25, or hybrid")
+    model: str = Query(..., description="Select the model for evaluation: tfidf, bm25, hybrid_parallel, or hybrid_serial")
 ):
     results = run_evaluation_suite(target_model=model) 
     return {"status": "success", "metrics": results}
