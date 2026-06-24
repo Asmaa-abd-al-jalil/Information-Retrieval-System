@@ -4,14 +4,21 @@ import requests
 
 app = FastAPI()
 
-# عناوين الخدمات
 REFINEMENT_URL = "http://127.0.0.1:8004/refine"
 RETRIEVAL_URL = "http://127.0.0.1:8002/retrieve"
 RANKING_URL = "http://127.0.0.1:8003/rank"
+CLUSTERING_URL = "http://127.0.0.1:8005/cluster"
+CRAWLING_URL = "http://127.0.0.1:8007/start-crawl"
 
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
+
+class ClusteringRequest(BaseModel):
+    documents: list[str]
+
+class CrawlRequest(BaseModel):
+    url: str
 
 @app.post("/search")
 def search_gateway(request: SearchRequest):
@@ -32,3 +39,17 @@ def search_gateway(request: SearchRequest):
         "refined_query": refined_query,
         "final_results": rank_resp["ranked_results"]
     }
+
+@app.post("/cluster-documents")
+def cluster_gateway(request: ClusteringRequest):
+    try:
+        response = requests.post(CLUSTERING_URL, json=request.dict())
+        return response.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/crawl")
+def gateway_crawl(request: CrawlRequest):
+    response = requests.post(CRAWLING_URL, json=request.dict())
+    return response.json()

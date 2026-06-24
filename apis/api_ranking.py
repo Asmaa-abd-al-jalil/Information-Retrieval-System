@@ -20,4 +20,4 @@ def rank(
     )
     
     return {"ranked_results": results}
-# uvicorn services.api_ranking:app --reload --port=8003
+# uvicorn apis.api_ranking:app --reload --port=8003
