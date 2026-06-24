@@ -9,6 +9,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 from services.data_service import get_dataset, count_documents, SUPPORTED_DATASETS
 from services.preprocessing_service import preprocess_text
 from services.index_service import (
+    INVERTED_INDEX_PATH,
     build_and_filter_index, 
     load_index, 
     get_index_stats, 
@@ -61,12 +62,13 @@ def run_preprocessing_test():
 
 
 def run_indexing():
-    print("Building inverted index and loading documents... Please wait...")
-    ds = get_dataset()
-    inverted_index, doc_lengths, doc_count = build_and_filter_index(ds, min_df=2, max_df_ratio=0.9)
-    print("Indexing completed successfully!")
-    stats = get_index_stats(inverted_index, doc_lengths, doc_count)
-    print(f"Index stats: {stats}")
+    if os.path.exists(INVERTED_INDEX_PATH):
+        print("Index already exists. Loading from disk...")
+    else:
+        print("Building inverted index... Please wait (this may take a while)...")
+        ds = get_dataset()
+        build_and_filter_index(ds, min_df=2, max_df_ratio=0.9)
+        print("Indexing completed and saved!")
 
 
 def run_retrieval_test(doc_texts):
