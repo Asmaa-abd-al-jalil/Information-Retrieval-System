@@ -42,13 +42,11 @@ def search_gateway(request: SearchRequest):
 
 @app.post("/cluster-documents")
 def cluster_gateway(request: ClusteringRequest):
-
-    response = requests.post(CLUSTERING_URL, json={"documents": request.documents})
-    
-    if response.status_code != 200:
-        raise HTTPException(status_code=502, detail="Clustering service is unreachable")
-        
-    return response.json()
+    try:
+        response = requests.post(CLUSTERING_URL, json=request.dict())
+        return response.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.post("/crawl")
