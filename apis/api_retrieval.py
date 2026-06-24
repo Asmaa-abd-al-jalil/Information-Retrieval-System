@@ -22,4 +22,4 @@ def get_results(request: RetrievalRequest):
     results = retrieve(clean_query, top_k=request.top_k)
     return {"query": request.query, "results": results}
 
-#  uvicorn services.api_retrieval:app --port 8001 --reload
+#  uvicorn apis.api_retrieval:app --port 8002 --reload

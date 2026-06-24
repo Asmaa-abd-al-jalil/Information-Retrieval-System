@@ -8,4 +8,4 @@ def refine(query: str = Body(..., embed=True)):
     corrected = correct_query(query)
     return {"original": query, "refined": corrected}
 
-#uvicorn services.api_refinement:app --port 8004 --reload
+#uvicorn apis.api_refinement:app --port 8004 --reload
