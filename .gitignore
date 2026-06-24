@@ -4,3 +4,4 @@ __pycache__/
 ir_tmp/
 data/
 venv312/
+models/
