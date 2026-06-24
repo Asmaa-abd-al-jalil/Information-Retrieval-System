@@ -4,14 +4,17 @@ import requests
 
 app = FastAPI()
 
-# عناوين الخدمات
 REFINEMENT_URL = "http://127.0.0.1:8004/refine"
 RETRIEVAL_URL = "http://127.0.0.1:8002/retrieve"
 RANKING_URL = "http://127.0.0.1:8003/rank"
+CLUSTERING_URL = "http://127.0.0.1:8005/cluster"
 
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
+
+class ClusteringRequest(BaseModel):
+    documents: list[str]
 
 @app.post("/search")
 def search_gateway(request: SearchRequest):
@@ -32,3 +35,13 @@ def search_gateway(request: SearchRequest):
         "refined_query": refined_query,
         "final_results": rank_resp["ranked_results"]
     }
+
+@app.post("/cluster-documents")
+def cluster_gateway(request: ClusteringRequest):
+
+    response = requests.post(CLUSTERING_URL, json={"documents": request.documents})
+    
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail="Clustering service is unreachable")
+        
+    return response.json()
