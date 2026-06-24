@@ -8,6 +8,7 @@ REFINEMENT_URL = "http://127.0.0.1:8004/refine"
 RETRIEVAL_URL = "http://127.0.0.1:8002/retrieve"
 RANKING_URL = "http://127.0.0.1:8003/rank"
 CLUSTERING_URL = "http://127.0.0.1:8005/cluster"
+CRAWLING_URL = "http://127.0.0.1:8007/start-crawl"
 
 class SearchRequest(BaseModel):
     query: str
@@ -15,6 +16,9 @@ class SearchRequest(BaseModel):
 
 class ClusteringRequest(BaseModel):
     documents: list[str]
+
+class CrawlRequest(BaseModel):
+    url: str
 
 @app.post("/search")
 def search_gateway(request: SearchRequest):
@@ -44,4 +48,10 @@ def cluster_gateway(request: ClusteringRequest):
     if response.status_code != 200:
         raise HTTPException(status_code=502, detail="Clustering service is unreachable")
         
+    return response.json()
+
+
+@app.post("/crawl")
+def gateway_crawl(request: CrawlRequest):
+    response = requests.post(CRAWLING_URL, json=request.dict())
     return response.json()
