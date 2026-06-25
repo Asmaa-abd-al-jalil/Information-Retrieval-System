@@ -10,46 +10,98 @@ RANKING_URL = "http://127.0.0.1:8003/rank"
 CLUSTERING_URL = "http://127.0.0.1:8005/cluster"
 CRAWLING_URL = "http://127.0.0.1:8007/start-crawl"
 
+
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
 
+    tfidf_weight: float = 0.1
+    bm25_weight: float = 0.4
+    bert_weight: float = 0.4
+    word2vec_weight: float = 0.1
+
+
 class ClusteringRequest(BaseModel):
     documents: list[str]
+
 
 class CrawlRequest(BaseModel):
     url: str
 
+
 @app.post("/search")
 def search_gateway(request: SearchRequest):
-    ref_resp = requests.post(REFINEMENT_URL, json={"query": request.query}).json()
+
+    ref_resp = requests.post(
+        REFINEMENT_URL,
+        json={"query": request.query}
+    ).json()
+
     refined_query = ref_resp["refined"]
 
-    ret_resp = requests.post(RETRIEVAL_URL, json={"query": refined_query, "top_k": request.top_k * 2}).json()
-    retrieved_docs = ret_resp["results"] 
+    ret_resp = requests.post(
+        RETRIEVAL_URL,
+        json={
+            "query": refined_query,
+            "top_k": request.top_k * 2,
+
+            "weights": {
+                "tfidf": request.tfidf_weight,
+                "bm25": request.bm25_weight,
+                "bert": request.bert_weight,
+                "word2vec": request.word2vec_weight
+            }
+        }
+    ).json()
+
+    retrieved_docs = ret_resp["results"]
     retrieved_ids = [doc[0] for doc in retrieved_docs]
 
-    rank_resp = requests.post(RANKING_URL, json={
-        "query_tokens": refined_query.split(),
-        "retrieved_doc_ids": retrieved_ids
-    }).json()
+    rank_resp = requests.post(
+        RANKING_URL,
+        json={
+            "query_tokens": refined_query.split(),
+            "retrieved_doc_ids": retrieved_ids
+        }
+    ).json()
 
     return {
         "original_query": request.query,
         "refined_query": refined_query,
+        "weights": {
+            "tfidf": request.tfidf_weight,
+            "bm25": request.bm25_weight,
+            "bert": request.bert_weight,
+            "word2vec": request.word2vec_weight
+        },
         "final_results": rank_resp["ranked_results"]
     }
 
+
 @app.post("/cluster-documents")
 def cluster_gateway(request: ClusteringRequest):
+
     try:
-        response = requests.post(CLUSTERING_URL, json=request.dict())
+        response = requests.post(
+            CLUSTERING_URL,
+            json=request.dict()
+        )
+
         return response.json()
+
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(
+            status_code=502,
+            detail=str(e)
+        )
 
 
 @app.post("/crawl")
 def gateway_crawl(request: CrawlRequest):
-    response = requests.post(CRAWLING_URL, json=request.dict())
+
+    response = requests.post(
+        CRAWLING_URL,
+        json=request.dict()
+    )
+
     return response.json()

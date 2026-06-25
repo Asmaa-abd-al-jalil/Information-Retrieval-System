@@ -2,48 +2,47 @@ import re
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
+from nltk.stem import PorterStemmer
 
+# إعداد الموارد مرة واحدة فقط عند تحميل الملف
 try:
     stop_words = set(stopwords.words('english'))
-    lemmatizer = WordNetLemmatizer()
 except LookupError:
+    nltk.download('punkt', quiet=True)
     nltk.download('punkt_tab', quiet=True)
     nltk.download('stopwords', quiet=True)
-    nltk.download('wordnet', quiet=True)
     stop_words = set(stopwords.words('english'))
-    lemmatizer = WordNetLemmatizer()
 
+# استخدام PorterStemmer للسرعة العالية في المعالجة
+stemmer = PorterStemmer()
 
 def normalize_text(text: str) -> str:
-    if not isinstance(text, str):
+    """تنظيف النص الأساسي."""
+    if not isinstance(text, str): 
         return ""
+    # تحويل النص لـ lowercase وإزالة الرموز غير الأبجدية الرقمية
     text = text.lower()
     text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    # إزالة المسافات الزائدة
     return re.sub(r'\s+', ' ', text).strip()
 
-
 def preprocess_text(text: str) -> dict:
+    """
+    المعالجة المسبقة للمستندات والاستعلامات.
+    ترجع القاموس المطلوب ليتوافق مع نظام الاسترجاع لديك.
+    """
     normalized = normalize_text(text)
+    tokens = word_tokenize(normalized)
     
-    try:
-        tokens = word_tokenize(normalized)
-    except LookupError:
-        nltk.download('punkt_tab', quiet=True)
-        tokens = word_tokenize(normalized)
-        
-    tokens_no_stop = [t for t in tokens if t not in stop_words and len(t) > 1]
-    final_tokens = [lemmatizer.lemmatize(t) for t in tokens_no_stop]
-        
+    # الفلترة (إزالة الـ Stopwords) والـ Stemming في تمريرة واحدة
+    final_tokens = [
+        stemmer.stem(t) 
+        for t in tokens 
+        if t not in stop_words and len(t) > 1
+    ]
+    
     return {
         "original": text,
-        "normalized": normalized,
-        "tokens": tokens,
-        "tokens_no_stop": tokens_no_stop,
         "final_tokens": final_tokens,
         "final_text": " ".join(final_tokens)
     }
-
-
-def preprocess_batch(texts: list) -> list:
-    return [preprocess_text(text)["final_text"] for text in texts]
