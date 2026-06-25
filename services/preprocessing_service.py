@@ -4,7 +4,6 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
 
-# إعداد الموارد مرة واحدة فقط عند تحميل الملف
 try:
     stop_words = set(stopwords.words('english'))
 except LookupError:
@@ -13,17 +12,14 @@ except LookupError:
     nltk.download('stopwords', quiet=True)
     stop_words = set(stopwords.words('english'))
 
-# استخدام PorterStemmer للسرعة العالية في المعالجة
 stemmer = PorterStemmer()
 
 def normalize_text(text: str) -> str:
     """تنظيف النص الأساسي."""
     if not isinstance(text, str): 
         return ""
-    # تحويل النص لـ lowercase وإزالة الرموز غير الأبجدية الرقمية
     text = text.lower()
     text = re.sub(r'[^a-z0-9\s]', ' ', text)
-    # إزالة المسافات الزائدة
     return re.sub(r'\s+', ' ', text).strip()
 
 def preprocess_text(text: str) -> dict:
@@ -34,7 +30,6 @@ def preprocess_text(text: str) -> dict:
     normalized = normalize_text(text)
     tokens = word_tokenize(normalized)
     
-    # الفلترة (إزالة الـ Stopwords) والـ Stemming في تمريرة واحدة
     final_tokens = [
         stemmer.stem(t) 
         for t in tokens 

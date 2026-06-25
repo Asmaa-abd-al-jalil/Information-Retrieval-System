@@ -7,7 +7,8 @@ import pandas as pd
 
 from services.data_service import get_dataset
 from services.index_service import load_index
-from services.database_service import get_all_documents
+from services.database_service import get_documents_by_ids
+
 from services.retrieval_service import (
     compute_bm25_scores,
     compute_tfidf_scores,
@@ -16,104 +17,79 @@ from services.retrieval_service import (
 )
 
 
-def run_evaluation_suite(
-        target_model="bm25",
-        doc_texts: dict = None
-):
-    """
-    Evaluate retrieval models using ir_measures.
-
-    Parameters:
-        target_model : bm25 | tfidf | hybrid | hybrid_parallel | hybrid_serial
-        doc_texts    : dictionary {doc_id: text}
-
-    Returns:
-        dict containing aggregate metrics.
-    """
+def run_evaluation_suite(target_model="bm25"):
 
     ds = get_dataset()
 
     # ======================================================
-    # Build Qrels DataFrame
+    # QRELS (TEST SET ONLY)
     # ======================================================
-
-    qrels_list = []
-
-    for qrel in ds.qrels_iter():
-        qrels_list.append({
-            'query_id': str(qrel.query_id),
-            'doc_id': str(qrel.doc_id),
-            'relevance': int(qrel.relevance)
-        })
-
-    qrels_df = pd.DataFrame(qrels_list)
+    qrels_df = pd.DataFrame([
+        {
+            "query_id": str(q.query_id),
+            "doc_id": str(q.doc_id),
+            "relevance": int(q.relevance)
+        }
+        for q in ds.qrels_iter()
+    ])
 
     # ======================================================
-    # Load index
+    # LOAD INDEX
     # ======================================================
-
     inverted_index, doc_lengths, doc_count = load_index()
 
-    # ======================================================
-    # Load documents automatically for hybrid models
-    # ======================================================
+    indexed_docs = doc_lengths  # dict is enough (fast lookup + clean SOA)
 
-    if target_model in [
-        "hybrid",
-        "hybrid_parallel",
-        "hybrid_serial"
-    ]:
-
-        if doc_texts is None:
-
-            print("[INFO] Loading documents from database...")
-
-            doc_texts = get_all_documents()
-
-            print(
-                f"[INFO] Loaded {len(doc_texts)} documents."
-            )
+    print(f"[INFO] Indexed docs: {len(indexed_docs)}")
 
     # ======================================================
-    # Hybrid weights
+    # LOAD DOC TEXTS (FAST - FROM DB ONLY)
     # ======================================================
+    if target_model in ["hybrid", "hybrid_parallel", "hybrid_serial"]:
 
+        print("[INFO] Loading documents from DB (indexed only)...")
+
+        doc_texts = get_documents_by_ids(list(indexed_docs.keys()))
+
+        print(f"[INFO] Loaded doc_texts: {len(doc_texts)}")
+
+    else:
+        doc_texts = None
+
+    # ======================================================
+    # WEIGHTS (clean separation)
+    # ======================================================
     optimized_weights = {
-        'tfidf': 0.10,
-        'bm25': 0.40,
-        'bert': 0.40,
-        'word2vec': 0.10
+        "tfidf": 0.10,
+        "bm25": 0.40,
+        "bert": 0.40,
+        "word2vec": 0.10
     }
 
     run = []
 
-    print(
-        f"[INFO] Starting evaluation using: {target_model}"
-    )
+    print(f"[INFO] Running evaluation: {target_model}")
 
     # ======================================================
-    # Evaluate all queries
+    # EVALUATION LOOP (ONLY QUERIES - NO DOCS)
     # ======================================================
+    for query in ds.queries_iter():
 
-    for query_obj in ds.queries_iter():
+        q_id = str(query.query_id)
 
-        q_id = str(query_obj.query_id)
-
-        # بناء نص الاستعلام من حقول TREC PM
         q_text = " ".join(filter(None, [
-            getattr(query_obj, "disease", ""),
-            getattr(query_obj, "gene", ""),
-            getattr(query_obj, "demographic", "")
+            getattr(query, "disease", ""),
+            getattr(query, "gene", ""),
+            getattr(query, "demographic", "")
         ])).strip()
+
+        if not q_text:
+            continue
 
         try:
 
-            # --------------------------------------------------
-            # BM25
-            # --------------------------------------------------
-
+            # ---------------- BM25 ----------------
             if target_model == "bm25":
-
                 results = compute_bm25_scores(
                     q_text,
                     inverted_index,
@@ -121,12 +97,8 @@ def run_evaluation_suite(
                     doc_count
                 )[:10]
 
-            # --------------------------------------------------
-            # TF-IDF
-            # --------------------------------------------------
-
+            # ---------------- TFIDF ----------------
             elif target_model == "tfidf":
-
                 results = compute_tfidf_scores(
                     q_text,
                     inverted_index,
@@ -134,22 +106,8 @@ def run_evaluation_suite(
                     doc_count
                 )[:10]
 
-            # --------------------------------------------------
-            # Hybrid Parallel
-            # --------------------------------------------------
-
-            elif target_model in [
-                "hybrid",
-                "hybrid_parallel"
-            ]:
-
-                if not doc_texts:
-
-                    print(
-                        "[WARNING] doc_texts is missing."
-                    )
-
-                    continue
+            # ---------------- HYBRID ----------------
+            elif target_model in ["hybrid", "hybrid_parallel"]:
 
                 results = hybrid_parallel(
                     q_text,
@@ -159,19 +117,7 @@ def run_evaluation_suite(
                     weights=optimized_weights
                 )
 
-            # --------------------------------------------------
-            # Hybrid Serial
-            # --------------------------------------------------
-
             elif target_model == "hybrid_serial":
-
-                if not doc_texts:
-
-                    print(
-                        "[WARNING] doc_texts is missing."
-                    )
-
-                    continue
 
                 results = hybrid_serial(
                     q_text,
@@ -180,37 +126,31 @@ def run_evaluation_suite(
                 )
 
             else:
-
                 results = []
 
-            # --------------------------------------------------
-            # Save results
-            # --------------------------------------------------
-
+            # ==================================================
+            # FILTER ONLY INDEXED DOCS (SAFE GUARANTEE)
+            # ==================================================
             for doc_id, score in results:
 
+                doc_id = str(doc_id)
+
+                if doc_id not in indexed_docs:
+                    continue
+
                 run.append({
-                    'query_id': q_id,
-                    'doc_id': str(doc_id),
-                    'score': float(score)
+                    "query_id": q_id,
+                    "doc_id": doc_id,
+                    "score": float(score)
                 })
 
         except Exception as e:
-
-            print(
-                f"[ERROR] Query {q_id} failed: {str(e)}"
-            )
+            print(f"[ERROR] Query {q_id}: {e}")
 
     # ======================================================
-    # No results protection
+    # SAFETY CHECK
     # ======================================================
-
     if not run:
-
-        print(
-            "[WARNING] No retrieval results generated."
-        )
-
         return {
             "MAP@10": 0.0,
             "Recall@10": 0.0,
@@ -220,20 +160,13 @@ def run_evaluation_suite(
 
     run_df = pd.DataFrame(run)
 
-    # ======================================================
-    # Evaluate only processed queries
-    # ======================================================
-
-    evaluated_queries = set(run_df["query_id"])
-
     filtered_qrels = qrels_df[
-        qrels_df["query_id"].isin(evaluated_queries)
+        qrels_df["query_id"].isin(run_df["query_id"])
     ]
 
     # ======================================================
-    # Metrics
+    # METRICS (standard IR evaluation)
     # ======================================================
-
     metrics = [
         ir_measures.MAP@10,
         ir_measures.Recall@10,
@@ -241,20 +174,18 @@ def run_evaluation_suite(
         ir_measures.nDCG@10
     ]
 
-    results_calculated = ir_measures.calc_aggregate(
+    results = ir_measures.calc_aggregate(
         metrics,
         filtered_qrels,
         run_df
     )
 
     final_results = {
-        str(metric): float(score)
-        for metric, score in results_calculated.items()
+        str(k): float(v) for k, v in results.items()
     }
 
-    print("\n===== Evaluation Results =====")
-
-    for metric, value in final_results.items():
-        print(f"{metric}: {value:.4f}")
+    print("\n===== RESULTS =====")
+    for k, v in final_results.items():
+        print(f"{k}: {v:.4f}")
 
     return final_results

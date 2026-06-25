@@ -1,6 +1,7 @@
 import os
 import pickle
 from collections import defaultdict
+
 from services.preprocessing_service import preprocess_text
 from services.database_service import init_db, insert_documents
 
@@ -54,21 +55,31 @@ def save_index(inverted_index, doc_lengths, doc_count):
     _CACHED_DOC_COUNT = doc_count
 
 
+
 def build_inverted_index(dataset, max_docs: int = None):
     init_db()
-    
+
     inverted_index = defaultdict(dict)
     doc_lengths = {}
     doc_count = 0
-    
+
     raw_docs_batch = {}
     BATCH_SIZE = 5000
 
     for i, doc in enumerate(dataset.docs_iter()):
+
         if max_docs and i >= max_docs:
             break
 
-        result = preprocess_text(doc.text)
+        text = " ".join(filter(None, [
+            getattr(doc, "title", ""),
+            getattr(doc, "condition", ""),
+            getattr(doc, "summary", ""),
+            getattr(doc, "detailed_description", ""),
+            getattr(doc, "eligibility", "")
+        ])).strip()
+
+        result = preprocess_text(text)
         tokens = result['final_tokens']
 
         if not tokens:
@@ -79,11 +90,15 @@ def build_inverted_index(dataset, max_docs: int = None):
             tf_counts[token] += 1
 
         current_doc_id = doc.doc_id
+
         for token, count in tf_counts.items():
             inverted_index[token][current_doc_id] = count
 
         doc_lengths[current_doc_id] = len(tokens)
-        raw_docs_batch[current_doc_id] = doc.text
+
+        # store clean text (NOT doc.text)
+        raw_docs_batch[current_doc_id] = text
+
         doc_count += 1
 
         if doc_count % BATCH_SIZE == 0:
@@ -96,30 +111,43 @@ def build_inverted_index(dataset, max_docs: int = None):
     return dict(inverted_index), doc_lengths, doc_count
 
 
-def filter_index_terms(inverted_index: dict, doc_count: int, 
+def filter_index_terms(inverted_index: dict, doc_count: int,
                         min_df: int = 2, max_df_ratio: float = 0.9) -> dict:
+
     max_df = int(doc_count * max_df_ratio)
     filtered = {}
-    
+
     for term, postings in inverted_index.items():
         df = len(postings)
+
         if df < min_df or df > max_df:
             continue
+
         filtered[term] = postings
-        
+
     return filtered
 
 
-def build_and_filter_index(dataset, max_docs: int = None, 
+def build_and_filter_index(dataset, max_docs: int = None,
                            min_df: int = 2, max_df_ratio: float = 0.9):
+
     inverted_index, doc_lengths, doc_count = build_inverted_index(dataset, max_docs)
-    filtered_index = filter_index_terms(inverted_index, doc_count, min_df, max_df_ratio)
+
+    filtered_index = filter_index_terms(
+        inverted_index,
+        doc_count,
+        min_df,
+        max_df_ratio
+    )
+
     save_index(filtered_index, doc_lengths, doc_count)
+
     return filtered_index, doc_lengths, doc_count
 
 
 def get_index_stats(inverted_index, doc_lengths, doc_count):
     avg_dl = sum(doc_lengths.values()) / len(doc_lengths) if doc_lengths else 0
+
     return {
         "doc_count": doc_count,
         "unique_terms": len(inverted_index),
