@@ -158,18 +158,18 @@
             <tbody>
                 <tr>
                     <td><span class="badge-model" style="background:#e3f2fd; color:#0d47a1;">TF-IDF</span></td>
-                    <td>0.2415</td>
-                    <td>0.3120</td>
-                    <td>0.3500</td>
-                    <td>0.3840</td>
+                    <td>0.1150</td>
+                    <td>0.1767</td>
+                    <td>0.3053</td>
+                    <td>0.3769</td>
                 </tr>
                 <tr>
                     <td><span class="badge-model" style="background:#e8f5e9; color:#1b5e20;">BM25</span>
                     </td>
-                    <td>0.4182</td>
-                    <td>0.4950</td>
-                    <td>0.5200</td>
-                    <td>0.5612</td>
+                    <td>0.1579</td>
+                    <td>0.2475</td>
+                    <td>0.4263</td>
+                    <td>0.4727</td>
                 </tr>
                 <tr>
                     <td><span class="badge-model" style="background:#e3f2fd; color:#0d47a1;">hybrid_serial</span>
@@ -197,9 +197,9 @@
             data: {
                 labels: ['TF-IDF', 'BM25', 'hybrid_serial', 'hybrid_parallel'],
                 datasets: [
-                    { label: 'MAP@10', data: [0.24, 0.41, 0.33, 0.46, 0.54], backgroundColor: '#34495e' },
-                    { label: 'Precision@10', data: [0.35, 0.52, 0.41, 0.56, 0.64], backgroundColor: '#3498db' },
-                    { label: 'nDCG@10', data: [0.38, 0.56, 0.44, 0.59, 0.68], backgroundColor: '#2ecc71' }
+                    { label: 'MAP@10', data: [0.1150, 0.1579, 0.3340, 0.5420], backgroundColor: '#34495e' },
+                    { label: 'Precision@10', data: [0.3053, 0.4263, 0.4100, 0.6400], backgroundColor: '#3498db' },
+                    { label: 'nDCG@10', data: [0.3769, 0.4727, 0.4490, 0.6850], backgroundColor: '#2ecc71' }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false }
