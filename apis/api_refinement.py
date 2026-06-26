@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Body
-from services.query_refinement_service import correct_query
+from query.query_refinement_service import correct_query
 
 app = FastAPI()
 

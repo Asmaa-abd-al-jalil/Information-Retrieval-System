@@ -3,377 +3,265 @@ import math
 import numpy as np
 from gensim.models import Word2Vec
 from collections import defaultdict
+from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from rank_bm25 import BM25Okapi
+from services.database_service import get_all_documents
 from services.preprocessing_service import preprocess_text
 from services.index_service import load_index
-from sentence_transformers import SentenceTransformer
-from services.database_service import get_documents_by_ids
 
-# متغير عالمي للنموذج
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 _word2vec_model = None
-
-def compute_tfidf_scores(query: str, inverted_index: dict, doc_lengths: dict, doc_count: int) -> dict:
-    """VSM TF-IDF: حساب درجات التشابه بين الاستعلام والوثائق"""
-    result = preprocess_text(query)
-    query_tokens = result['final_tokens']
-
-    scores = defaultdict(float)
-
-    for token in query_tokens:
-        if token not in inverted_index:
-            continue
-
-        # حساب الـ IDF
-        df = len(inverted_index[token])
-        idf = math.log((doc_count + 1) / (df + 1)) + 1
-
-        # حساب الـ TF-IDF لكل وثيقة
-        for doc_id, tf in inverted_index[token].items():
-            tf_norm = 1 + math.log(tf) if tf > 0 else 0
-            scores[doc_id] += tf_norm * idf
-
-    # ترتيب النتائج
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return ranked
-
-
-def compute_bm25_scores(query: str, inverted_index: dict, doc_lengths: dict, 
-                         doc_count: int, k1: float = 1.5, b: float = 0.75) -> list:
-    print(f"  📊 BM25 Parameters: k1={k1}, b={b}")
-    """BM25: حساب درجات التشابه"""
-    result = preprocess_text(query)
-    query_tokens = result['final_tokens']
-
-    avg_dl = sum(doc_lengths.values()) / len(doc_lengths) if doc_lengths else 1
-    scores = defaultdict(float)
-
-    for token in query_tokens:
-        if token not in inverted_index:
-            continue
-
-        df = len(inverted_index[token])
-        idf = math.log((doc_count - df + 0.5) / (df + 0.5) + 1)
-
-        for doc_id, tf in inverted_index[token].items():
-            dl = doc_lengths.get(doc_id, avg_dl)
-            tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / avg_dl))
-            scores[doc_id] += idf * tf_norm
-
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return ranked
-
-
-def retrieve(query: str, model: str = "tfidf", top_k: int = 10,
-             k1: float = 1.5, b: float = 0.75, doc_texts: dict = None) -> list:
-    """
-    model: 'tfidf' أو 'bm25' أو 'embedding'
-    doc_texts: مطلوب فقط عند model='embedding' {doc_id: text}
-    """
-    inverted_index, doc_lengths, doc_count = load_index()
-
-    if model == "tfidf":
-        return compute_tfidf_scores(query, inverted_index, doc_lengths, doc_count)[:top_k]
-    elif model == "bm25":
-        return compute_bm25_scores(query, inverted_index, doc_lengths, doc_count, k1=k1, b=b)[:top_k]
-    elif model == "embedding":
-        if not doc_texts:
-            raise ValueError("❌ لازم تعطي doc_texts عند استخدام embedding")
-        return compute_embedding_scores(query, doc_texts, top_k=top_k)
-    else:
-        raise ValueError(f"❌ نموذج غير معرف: {model}")
-
-def retrieve_with_text(query: str, model: str = "tfidf", top_k: int = 10,
-                       k1: float = 1.5, b: float = 0.75,
-                       doc_texts: dict = None,
-                       fusion_method: str = "rrf") -> list:
-    """
-    نفس الاسترجاع بس بيرجع النص الأصلي من الـ Database
-    """
-    # جيب الـ IDs
-    from services.query_service import search
-    response = search(query, model=model, top_k=top_k,
-                     k1=k1, b=b, doc_texts=doc_texts,
-                     fusion_method=fusion_method)
-    
-    results = response['results']
-    doc_ids = [doc_id for doc_id, _ in results]
-    
-    # اقرأ النص الأصلي من الـ Database
-    raw_texts = get_documents_by_ids(doc_ids)
-    
-    # ادمج النتائج مع النص الأصلي
-    final_results = []
-    for doc_id, score in results:
-        final_results.append({
-            "doc_id":   doc_id,
-            "score":    round(score, 4),
-            "raw_text": raw_texts.get(doc_id, "")[:200]  # أول 200 حرف
-        })
-    
-    return final_results
-
-
-# تحميل النموذج مرة وحدة بس
 _embedding_model = None
+_tfidf_vectorizer = None
+_tfidf_doc_matrix = None
+
+_bm25_model = None
+_bm25_doc_ids = None
+_bm25_corpus_ready = False
 
 def get_embedding_model():
     global _embedding_model
     if _embedding_model is None:
-        print("🔄 جاري تحميل نموذج BERT...")
-        _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        print("✅ تم تحميل النموذج")
+        model_name = 'all-MiniLM-L6-v2'
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(os.path.dirname(current_dir), 'models')
+        print("Downloading/Loading model...")
+        _embedding_model = SentenceTransformer(model_name, cache_folder=model_path)
     return _embedding_model
 
-def cosine_similarity(vec1, vec2):
-    """حساب التشابه بين متجهين"""
-    dot = np.dot(vec1, vec2)
-    norm = np.linalg.norm(vec1) * np.linalg.norm(vec2)
-    return dot / norm if norm > 0 else 0.0
+def cosine_similarity_matrix(query_vec, doc_matrix):
+    query_norm = np.linalg.norm(query_vec)
+    if query_norm == 0:
+        return np.zeros(len(doc_matrix))
+    doc_norms = np.linalg.norm(doc_matrix, axis=1)
+    doc_norms[doc_norms == 0] = 1.0
+    dot_products = np.dot(doc_matrix, query_vec)
+    return dot_products / (query_norm * doc_norms)
 
-def compute_embedding_scores(query: str, doc_texts: dict, top_k: int = 10) -> list:
-    """
-    Embedding: حساب التشابه بين الاستعلام والوثائق
-    doc_texts: {doc_id: text}
-    """
+def compute_tfidf_scores(query: str,
+                          inverted_index: dict,
+                          doc_lengths: dict,
+                          doc_count: int) -> list:
+
+    global _tfidf_vectorizer, _tfidf_doc_matrix
+
+    docs = get_all_documents()
+
+    if not docs:
+        return []
+
+    doc_ids = list(docs.keys())
+
+    corpus = [
+        preprocess_text(text)['final_text']
+        for text in docs.values()
+    ]
+
+    if _tfidf_vectorizer is None:
+        print("Building TF-IDF model...")
+
+        _tfidf_vectorizer = TfidfVectorizer()
+
+        _tfidf_doc_matrix = (
+            _tfidf_vectorizer.fit_transform(corpus)
+        )
+
+    processed_query = preprocess_text(
+        query
+    )['final_text']
+
+    query_vector = _tfidf_vectorizer.transform(
+        [processed_query]
+    )
+
+    similarities = cosine_similarity(
+        query_vector,
+        _tfidf_doc_matrix
+    ).flatten()
+
+    scores = list(zip(doc_ids, similarities))
+
+    return sorted(
+        scores,
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+def compute_bm25_scores(
+    query: str,
+    inverted_index: dict,
+    doc_lengths: dict,
+    doc_count: int
+) -> list:
+
+    global _bm25_model, _bm25_doc_ids, _bm25_corpus_ready
+
+    if _bm25_model is None:
+
+        print("[BM25] Loading documents from DB...")
+
+        docs = get_all_documents()
+
+        if not docs:
+            return []
+
+        _bm25_doc_ids = list(docs.keys())
+
+        print("[BM25] Preprocessing corpus (ONE TIME)...")
+
+        corpus = []
+
+        for i, text in enumerate(docs.values()):
+
+            # تقدم progress لتتأكدي أنه لا يتوقف
+            if i % 20000 == 0:
+                print(f"[BM25] processed {i} docs")
+
+            tokens = preprocess_text(text)['final_tokens']
+            corpus.append(tokens)
+
+        print("[BM25] Building BM25 index...")
+
+        _bm25_model = BM25Okapi(corpus)
+
+        _bm25_corpus_ready = True
+
+    # --------- query processing ----------
+    query_tokens = preprocess_text(query)['final_tokens']
+
+    scores = _bm25_model.get_scores(query_tokens)
+
+    results = list(zip(_bm25_doc_ids, scores))
+
+    return sorted(results, key=lambda x: x[1], reverse=True)
+
+def compute_embedding_scores(original_query: str, doc_texts: dict, top_k: int = 10) -> list:
+    if not doc_texts: return []
     model = get_embedding_model()
-
-    # تمثيل الاستعلام
-    query_vec = model.encode(query, convert_to_numpy=True)
-
-    # تمثيل الوثائق ودرجات التشابه
-    scores = []
+    query_vec = model.encode(original_query, convert_to_numpy=True)
     doc_ids = list(doc_texts.keys())
-    doc_vecs = model.encode(list(doc_texts.values()), convert_to_numpy=True, show_progress_bar=True)
+    doc_vecs = model.encode(list(doc_texts.values()), convert_to_numpy=True, show_progress_bar=False)
+    sims = cosine_similarity_matrix(query_vec, doc_vecs)
+    scores = [(doc_id, float(score)) for doc_id, score in zip(doc_ids, sims)]
+    return sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
 
-    for doc_id, doc_vec in zip(doc_ids, doc_vecs):
-        score = cosine_similarity(query_vec, doc_vec)
-        scores.append((doc_id, score))
+def hybrid_serial(original_query: str, doc_texts: dict, top_k: int = 10) -> list:
+    inverted_index, doc_lengths, doc_count = load_index()
+    bm25_results = compute_bm25_scores(original_query, inverted_index, doc_lengths, doc_count)
+    top_50_ids = [doc_id for doc_id, _ in bm25_results[:50]]
+    filtered_texts = {doc_id: doc_texts[doc_id] for doc_id in top_50_ids if doc_id in doc_texts}
+    return compute_embedding_scores(original_query, filtered_texts, top_k=top_k)
 
-    ranked = sorted(scores, key=lambda x: x[1], reverse=True)
-    return ranked[:top_k]
-
-def hybrid_serial(query: str, doc_texts: dict, top_k: int = 10,
-                  k1: float = 1.5, b: float = 0.75,
-                  original_query: str = None) -> list:
-    
+def hybrid_parallel(original_query: str, doc_texts: dict, top_k: int = 10, fusion_method: str = "rrf", weights: dict = None) -> list:
+    if weights is None: weights = {'tfidf': 0.25, 'bm25': 0.25, 'bert': 0.25, 'word2vec': 0.25}
     inverted_index, doc_lengths, doc_count = load_index()
     
-    # المرحلة 1: TF-IDF بالنص المعالج
-    print("  🔄 المرحلة 1: TF-IDF...")
-    tfidf_results = compute_tfidf_scores(
-        query, inverted_index, doc_lengths, doc_count
-    )
-    top_100_ids = set(doc_id for doc_id, _ in tfidf_results[:100])
+    bm25_results = compute_bm25_scores(original_query, inverted_index, doc_lengths, doc_count)
+    top_300_ids = [
+    doc_id for doc_id, _
+    in bm25_results[:300]]
 
-    # المرحلة 2: BM25 بالنص المعالج
-    print("  🔄 المرحلة 2: BM25...")
-    bm25_results = compute_bm25_scores(
-        query, inverted_index, doc_lengths, doc_count, k1=k1, b=b
-    )
-    top_50 = [(doc_id, score) for doc_id, score in bm25_results 
-              if doc_id in top_100_ids][:50]
-    top_50_ids = set(doc_id for doc_id, _ in top_50)
+    filtered_texts = {
+    doc_id: doc_texts[doc_id]
+    for doc_id in top_300_ids
+    if doc_id in doc_texts}
 
-    # المرحلة 3: Embedding بالنص الأصلي
-    print("  🔄 المرحلة 3: Embedding...")
-    embed_query = original_query if original_query else query
-    filtered_texts = {doc_id: doc_texts[doc_id] 
-                     for doc_id in top_50_ids if doc_id in doc_texts}
-    
-    if not filtered_texts:
-        return top_50[:top_k]
-    
-    return compute_embedding_scores(embed_query, filtered_texts, top_k=top_k)
-
-
-def hybrid_parallel(query: str, doc_texts: dict, top_k: int = 10,
-                    k1: float = 1.5, b: float = 0.75,
-                    fusion_method: str = "rrf",
-                    weights: dict = None) -> list:
-    """
-    Hybrid Parallel: TF-IDF + BM25 + BERT + Word2Vec بالتوازي
-    fusion_method: 'rrf' أو 'weighted_sum'
-    """
-    if weights is None:
-        weights = {'tfidf': 0.25, 'bm25': 0.25, 'bert': 0.25, 'word2vec': 0.25}
-
-    inverted_index, doc_lengths, doc_count = load_index()
-
-    print("  🔄 TF-IDF...")
-    tfidf_results = compute_tfidf_scores(query, inverted_index, doc_lengths, doc_count)
-
-    print("  🔄 BM25...")
-    bm25_results = compute_bm25_scores(query, inverted_index, doc_lengths, doc_count, k1=k1, b=b)
-
-    print("  🔄 BERT Embedding...")
-    bert_results = compute_embedding_scores(query, doc_texts, top_k=len(doc_texts))
-
-    print("  🔄 Word2Vec Embedding...")
-    w2v_results = compute_word2vec_scores(query, doc_texts, top_k=len(doc_texts))
+    tfidf_results = compute_tfidf_scores(original_query, inverted_index, doc_lengths, doc_count)
+    bert_results = compute_embedding_scores(original_query, filtered_texts, top_k=len(filtered_texts))
+    w2v_results = compute_word2vec_scores(original_query, filtered_texts, top_k=len(filtered_texts))
 
     if fusion_method == "rrf":
         return _reciprocal_rank_fusion_4(tfidf_results, bm25_results, bert_results, w2v_results, top_k)
-    elif fusion_method == "weighted_sum":
-        return _weighted_sum_fusion_4(tfidf_results, bm25_results, bert_results, w2v_results, weights, top_k)
-    else:
-        raise ValueError(f"❌ fusion method غير معرف: {fusion_method}")
-
+    return _weighted_sum_fusion_4(tfidf_results, bm25_results, bert_results, w2v_results, weights, top_k)
 
 def _reciprocal_rank_fusion_4(r1, r2, r3, r4, top_k: int, k: int = 60) -> list:
-    """RRF لـ 4 نماذج"""
     scores = defaultdict(float)
     for results in [r1, r2, r3, r4]:
         for rank, (doc_id, _) in enumerate(results):
             scores[doc_id] += 1 / (k + rank + 1)
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
 
-
-def _weighted_sum_fusion_4(r1, r2, r3, r4, weights: dict, top_k: int) -> list:
-    """Weighted Sum لـ 4 نماذج"""
+def _weighted_sum_fusion_4(r1, r2, r3, r4, weights, top_k):
     def normalize(results):
-        if not results:
-            return {}
-        max_s = max(s for _, s in results)
-        min_s = min(s for _, s in results)
+        if not results: return {}
+        scores_list = [s for _, s in results]
+        max_s, min_s = max(scores_list), min(scores_list)
         diff = max_s - min_s or 1
         return {doc_id: (score - min_s) / diff for doc_id, score in results}
-
-    n1 = normalize(r1)
-    n2 = normalize(r2)
-    n3 = normalize(r3)
-    n4 = normalize(r4)
-
+    n1, n2, n3, n4 = normalize(r1), normalize(r2), normalize(r3), normalize(r4)
     all_docs = set(n1) | set(n2) | set(n3) | set(n4)
-    scores = {}
-    for doc_id in all_docs:
-        scores[doc_id] = (
-            weights['tfidf']    * n1.get(doc_id, 0) +
-            weights['bm25']     * n2.get(doc_id, 0) +
-            weights['bert']     * n3.get(doc_id, 0) +
-            weights['word2vec'] * n4.get(doc_id, 0)
-        )
+    scores = {d: weights['tfidf']*n1.get(d, 0) + weights['bm25']*n2.get(d, 0) + weights['bert']*n3.get(d, 0) + weights['word2vec']*n4.get(d, 0) for d in all_docs}
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
 
-def train_word2vec(dataset, max_docs: int = None):
+def train_word2vec(dataset, max_docs=None):
     global _word2vec_model
-    print("🔄 جاري تدريب Word2Vec...")
-    
-    # إذا موجود على الـ disk حمّله مباشرة
+
     if os.path.exists("data/word2vec.model"):
         load_word2vec()
         return _word2vec_model
-    
+
+    print("Training Word2Vec model...")
+
     sentences = []
+
     for i, doc in enumerate(dataset.docs_iter()):
+
         if max_docs and i >= max_docs:
             break
-        result = preprocess_text(doc.text)
-        if result['final_tokens']:
-            sentences.append(result['final_tokens'])
-    
+
+        full_text = (
+            f"{doc.title} "
+            f"{doc.condition} "
+            f"{doc.summary} "
+            f"{doc.detailed_description} "
+            f"{doc.eligibility}"
+        )
+
+        tokens = preprocess_text(full_text)['final_tokens']
+
+        if tokens:
+            sentences.append(tokens)
+
+    print(f"Training on {len(sentences)} documents...")
+
     _word2vec_model = Word2Vec(
         sentences=sentences,
         vector_size=100,
         window=5,
         min_count=2,
         workers=4,
-        epochs=5
+        epochs=10
     )
-    
-    # حفظ تلقائي بعد التدريب
+
     save_word2vec()
-    print(f"✅ تم تدريب Word2Vec على {len(sentences):,} وثيقة")
+
+    print("Word2Vec model trained and saved successfully.")
+
     return _word2vec_model
+
+def load_word2vec(path="data/word2vec.model"):
+    global _word2vec_model
+    if os.path.exists(path): _word2vec_model = Word2Vec.load(path)
+
+def save_word2vec(path="data/word2vec.model"):
+    os.makedirs("data", exist_ok=True)
+    if _word2vec_model: _word2vec_model.save(path)
 
 def get_word2vec_model():
     global _word2vec_model
-    if _word2vec_model is None:
-        raise ValueError("❌ Word2Vec لسا ما تدرّب، شغّل train_word2vec أولاً")
+    if _word2vec_model is None: load_word2vec()
+    if _word2vec_model is None: raise ValueError("Word2Vec model not trained")
     return _word2vec_model
 
-def get_word2vec_vector(tokens: list) -> np.ndarray:
-    """حساب متوسط متجهات الكلمات"""
+def get_word2vec_vector(tokens):
     model = get_word2vec_model()
-    vectors = []
-    for token in tokens:
-        if token in model.wv:
-            vectors.append(model.wv[token])
-    if not vectors:
-        return np.zeros(model.vector_size)
-    return np.mean(vectors, axis=0)
+    vectors = [model.wv[token] for token in tokens if token in model.wv]
+    return np.mean(vectors, axis=0) if vectors else np.zeros(model.vector_size)
 
 def compute_word2vec_scores(query: str, doc_texts: dict, top_k: int = 10) -> list:
-    """Word2Vec: حساب التشابه بين الاستعلام والوثائق"""
-    result = preprocess_text(query)
-    query_tokens = result['final_tokens']
-    query_vec = get_word2vec_vector(query_tokens)
-    
-    scores = []
-    for doc_id, text in doc_texts.items():
-        doc_result = preprocess_text(text)
-        doc_vec = get_word2vec_vector(doc_result['final_tokens'])
-        score = cosine_similarity(query_vec, doc_vec)
-        scores.append((doc_id, score))
-    
+    query_vec = get_word2vec_vector(preprocess_text(query)['final_tokens'])
+    scores = [(doc_id, float(cosine_similarity_matrix(query_vec, get_word2vec_vector(preprocess_text(text)['final_tokens']).reshape(1, -1))[0])) for doc_id, text in doc_texts.items()]
     return sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
-
-def _reciprocal_rank_fusion(results1, results2, results3, top_k: int, k: int = 60) -> list:
-    """
-    RRF: كل وثيقة تاخذ درجة = sum(1 / (k + rank))
-    """
-    scores = defaultdict(float)
-    
-    for rank, (doc_id, _) in enumerate(results1):
-        scores[doc_id] += 1 / (k + rank + 1)
-    for rank, (doc_id, _) in enumerate(results2):
-        scores[doc_id] += 1 / (k + rank + 1)
-    for rank, (doc_id, _) in enumerate(results3):
-        scores[doc_id] += 1 / (k + rank + 1)
-
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return ranked[:top_k]
-
-
-def _weighted_sum_fusion(results1, results2, results3, weights: dict, top_k: int) -> list:
-    """
-    Weighted Sum: كل وثيقة تاخذ درجة = w1*score1 + w2*score2 + w3*score3
-    بعد normalize الدرجات
-    """
-    def normalize(results):
-        if not results:
-            return {}
-        max_score = max(s for _, s in results)
-        min_score = min(s for _, s in results)
-        diff = max_score - min_score or 1
-        return {doc_id: (score - min_score) / diff for doc_id, score in results}
-
-    norm1 = normalize(results1)
-    norm2 = normalize(results2)
-    norm3 = normalize(results3)
-
-    all_docs = set(norm1) | set(norm2) | set(norm3)
-    scores = {}
-    for doc_id in all_docs:
-        scores[doc_id] = (
-            weights['tfidf'] * norm1.get(doc_id, 0) +
-            weights['bm25'] * norm2.get(doc_id, 0) +
-            weights['embedding'] * norm3.get(doc_id, 0)
-        )
-
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return ranked[:top_k]
-# حفظ ال Word2Vec على الdisk
-def save_word2vec(path: str = "data/word2vec.model"):
-    """حفظ نموذج Word2Vec على الـ disk"""
-    model = get_word2vec_model()
-    os.makedirs("data", exist_ok=True)
-    model.save(path)
-    print(f"✅ تم حفظ Word2Vec: {path}")
-
-def load_word2vec(path: str = "data/word2vec.model"):
-    """تحميل نموذج Word2Vec من الـ disk"""
-    global _word2vec_model
-    if os.path.exists(path):
-        _word2vec_model = Word2Vec.load(path)
-        print(f"✅ تم تحميل Word2Vec من الـ disk")
-    else:
-        raise FileNotFoundError("❌ ما في نموذج محفوظ، شغّل train_word2vec أولاً")
