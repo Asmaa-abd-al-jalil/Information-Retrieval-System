@@ -159,7 +159,6 @@ def hybrid_parallel(original_query: str, doc_texts: dict, top_k: int = 10, fusio
     if weights is None: weights = {'tfidf': 0.25, 'bm25': 0.25, 'bert': 0.25, 'word2vec': 0.25}
     inverted_index, doc_lengths, doc_count = load_index()
     
-    # تحسين الأداء: استخدام BM25 لتصفية أفضل 100 مستند للعمل عليها فقط
     bm25_results = compute_bm25_scores(original_query, inverted_index, doc_lengths, doc_count)
     top_300_ids = [
     doc_id for doc_id, _
@@ -200,7 +199,6 @@ def _weighted_sum_fusion_4(r1, r2, r3, r4, weights, top_k):
 def train_word2vec(dataset, max_docs=None):
     global _word2vec_model
 
-    # تحميل المودل إذا كان موجوداً مسبقاً
     if os.path.exists("data/word2vec.model"):
         load_word2vec()
         return _word2vec_model
@@ -214,7 +212,6 @@ def train_word2vec(dataset, max_docs=None):
         if max_docs and i >= max_docs:
             break
 
-        # دمج حقول ClinicalTrials
         full_text = (
             f"{doc.title} "
             f"{doc.condition} "

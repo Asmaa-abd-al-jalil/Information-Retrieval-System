@@ -1,13 +1,9 @@
 import os
-
-os.environ['IR_DATASETS_HOME'] = r"D:\ir_storage"
-
-import ir_measures
 import pandas as pd
+import ir_measures
 
 from services.data_service import get_dataset
 from services.index_service import load_index
-from services.database_service import get_documents_by_ids
 
 from services.retrieval_service import (
     compute_bm25_scores,
@@ -16,14 +12,30 @@ from services.retrieval_service import (
     hybrid_serial
 )
 
+os.environ['IR_DATASETS_HOME'] = r"D:\ir_storage"
+
+# =========================
+# GLOBAL CACHE (VERY IMPORTANT)
+# =========================
+_QUERY_CACHE = {}
+
+
+def build_query_text(query):
+    """Fast safe query builder"""
+    return " ".join(filter(None, [
+        getattr(query, "disease", ""),
+        getattr(query, "gene", ""),
+        getattr(query, "demographic", "")
+    ])).strip()
+
 
 def run_evaluation_suite(target_model="bm25"):
 
     ds = get_dataset()
 
-    # ======================================================
-    # QRELS (TEST SET ONLY)
-    # ======================================================
+    # =========================
+    # QRELS
+    # =========================
     qrels_df = pd.DataFrame([
         {
             "query_id": str(q.query_id),
@@ -33,32 +45,16 @@ def run_evaluation_suite(target_model="bm25"):
         for q in ds.qrels_iter()
     ])
 
-    # ======================================================
-    # LOAD INDEX
-    # ======================================================
+    # =========================
+    # LOAD INDEX (cached)
+    # =========================
     inverted_index, doc_lengths, doc_count = load_index()
 
-    indexed_docs = doc_lengths  # dict is enough (fast lookup + clean SOA)
+    print(f"[INFO] docs: {len(doc_lengths)}")
 
-    print(f"[INFO] Indexed docs: {len(indexed_docs)}")
-
-    # ======================================================
-    # LOAD DOC TEXTS (FAST - FROM DB ONLY)
-    # ======================================================
-    if target_model in ["hybrid", "hybrid_parallel", "hybrid_serial"]:
-
-        print("[INFO] Loading documents from DB (indexed only)...")
-
-        doc_texts = get_documents_by_ids(list(indexed_docs.keys()))
-
-        print(f"[INFO] Loaded doc_texts: {len(doc_texts)}")
-
-    else:
-        doc_texts = None
-
-    # ======================================================
-    # WEIGHTS (clean separation)
-    # ======================================================
+    # =========================
+    # HYBRID WEIGHTS
+    # =========================
     optimized_weights = {
         "tfidf": 0.10,
         "bm25": 0.40,
@@ -68,88 +64,83 @@ def run_evaluation_suite(target_model="bm25"):
 
     run = []
 
-    print(f"[INFO] Running evaluation: {target_model}")
-
-    # ======================================================
-    # EVALUATION LOOP (ONLY QUERIES - NO DOCS)
-    # ======================================================
+    # =========================
+    # MAIN LOOP (FAST MODE)
+    # =========================
     for query in ds.queries_iter():
 
         q_id = str(query.query_id)
-
-        q_text = " ".join(filter(None, [
-            getattr(query, "disease", ""),
-            getattr(query, "gene", ""),
-            getattr(query, "demographic", "")
-        ])).strip()
+        q_text = build_query_text(query)
 
         if not q_text:
             continue
 
-        try:
+        # -----------------------
+        # CACHE CHECK
+        # -----------------------
+        if q_text in _QUERY_CACHE:
+            results = _QUERY_CACHE[q_text]
 
-            # ---------------- BM25 ----------------
-            if target_model == "bm25":
-                results = compute_bm25_scores(
-                    q_text,
-                    inverted_index,
-                    doc_lengths,
-                    doc_count
-                )[:10]
+        else:
+            try:
+                # BM25
+                if target_model == "bm25":
+                    results = compute_bm25_scores(
+                        q_text,
+                        inverted_index,
+                        doc_lengths,
+                        doc_count
+                    )[:10]
 
-            # ---------------- TFIDF ----------------
-            elif target_model == "tfidf":
-                results = compute_tfidf_scores(
-                    q_text,
-                    inverted_index,
-                    doc_lengths,
-                    doc_count
-                )[:10]
+                # TFIDF
+                elif target_model == "tfidf":
+                    results = compute_tfidf_scores(
+                        q_text,
+                        inverted_index,
+                        doc_lengths,
+                        doc_count
+                    )[:10]
 
-            # ---------------- HYBRID ----------------
-            elif target_model in ["hybrid", "hybrid_parallel"]:
+                # HYBRID (parallel is faster)
+                elif target_model in ["hybrid", "hybrid_parallel"]:
+                    results = hybrid_parallel(
+                        q_text,
+                        doc_texts=None,  
+                        top_k=10,
+                        fusion_method="weighted_sum",
+                        weights=optimized_weights
+                    )
 
-                results = hybrid_parallel(
-                    q_text,
-                    doc_texts=doc_texts,
-                    top_k=10,
-                    fusion_method="weighted_sum",
-                    weights=optimized_weights
-                )
+                elif target_model == "hybrid_serial":
+                    results = hybrid_serial(
+                        q_text,
+                        doc_texts=None,
+                        top_k=10
+                    )
 
-            elif target_model == "hybrid_serial":
+                else:
+                    results = []
 
-                results = hybrid_serial(
-                    q_text,
-                    doc_texts=doc_texts,
-                    top_k=10
-                )
+                _QUERY_CACHE[q_text] = results
 
-            else:
-                results = []
+            except Exception as e:
+                print(f"[ERROR] {q_id}: {e}")
+                continue
 
-            # ==================================================
-            # FILTER ONLY INDEXED DOCS (SAFE GUARANTEE)
-            # ==================================================
-            for doc_id, score in results:
+        # =========================
+        # STORE RESULTS
+        # =========================
+        for doc_id, score in results:
 
-                doc_id = str(doc_id)
+            run.append({
+                "query_id": q_id,
+                "doc_id": str(doc_id),
+                "score": float(score)
+            })
 
-                if doc_id not in indexed_docs:
-                    continue
-
-                run.append({
-                    "query_id": q_id,
-                    "doc_id": doc_id,
-                    "score": float(score)
-                })
-
-        except Exception as e:
-            print(f"[ERROR] Query {q_id}: {e}")
-
-    # ======================================================
-    # SAFETY CHECK
-    # ======================================================
+    # =========================
+    # EDGE CASE
+    # =========================
     if not run:
         return {
             "MAP@10": 0.0,
@@ -160,13 +151,9 @@ def run_evaluation_suite(target_model="bm25"):
 
     run_df = pd.DataFrame(run)
 
-    filtered_qrels = qrels_df[
-        qrels_df["query_id"].isin(run_df["query_id"])
-    ]
-
-    # ======================================================
-    # METRICS (standard IR evaluation)
-    # ======================================================
+    # =========================
+    # METRICS (NO FILTERING BUG)
+    # =========================
     metrics = [
         ir_measures.MAP@10,
         ir_measures.Recall@10,
@@ -176,13 +163,11 @@ def run_evaluation_suite(target_model="bm25"):
 
     results = ir_measures.calc_aggregate(
         metrics,
-        filtered_qrels,
+        qrels_df,
         run_df
     )
 
-    final_results = {
-        str(k): float(v) for k, v in results.items()
-    }
+    final_results = {str(k): float(v) for k, v in results.items()}
 
     print("\n===== RESULTS =====")
     for k, v in final_results.items():
