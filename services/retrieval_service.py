@@ -265,3 +265,15 @@ def compute_word2vec_scores(query: str, doc_texts: dict, top_k: int = 10) -> lis
     query_vec = get_word2vec_vector(preprocess_text(query)['final_tokens'])
     scores = [(doc_id, float(cosine_similarity_matrix(query_vec, get_word2vec_vector(preprocess_text(text)['final_tokens']).reshape(1, -1))[0])) for doc_id, text in doc_texts.items()]
     return sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
+
+def retrieve(query: str, top_k: int = 10):
+    inverted_index, doc_lengths, doc_count = load_index()
+
+    results = compute_bm25_scores(
+        query,
+        inverted_index,
+        doc_lengths,
+        doc_count
+    )
+
+    return results[:top_k]
