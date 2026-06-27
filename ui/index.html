@@ -4,137 +4,623 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>محرك بحث استرجاع المعلومات</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
+    <title>محرك البحث الطبي الذكي | IR System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+
     <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #e74c3c;
+            --bg-color: #f4f6f7;
+            --sidebar-width: 320px;
+            --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+            --border-radius: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Cairo', sans-serif;
+        }
+
         body {
-            background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            color: #333;
         }
 
-        .search-card {
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        /* --- تنسيقات السايدبار وباقي الصفحة --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--primary-color);
+            color: #ecf0f1;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
         }
 
-        .result-item {
+        .sidebar h2 {
+            font-size: 20px;
+            font-weight: 700;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--secondary-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #bdc3c7;
+        }
+
+        .form-group select,
+        .form-group input {
+            padding: 10px;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--secondary-color);
+            background-color: #34495e;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .form-group select:focus,
+        .form-group input:focus {
+            border-color: #3498db;
+        }
+
+        .param-sub-group {
+            background: rgba(0, 0, 0, 0.15);
+            padding: 12px;
+            border-radius: var(--border-radius);
+            margin-top: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .top-navbar {
+            background-color: #fff;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+        }
+
+        .nav-title h1 {
+            font-size: 22px;
+            color: var(--primary-color);
+        }
+
+        .nav-links a {
+            color: #7f8c8d;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            transition: color 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary-color);
+        }
+
+        .search-area-wrapper {
+            flex: 1;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            overflow-y: auto;
+        }
+
+        .search-bar-container {
+            display: flex;
+            gap: 15px;
             background: #fff;
-            border-left: 5px solid #0d6efd;
-            border-radius: 5px;
-            transition: 0.2s;
+            padding: 12px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
         }
 
-        .result-item:hover {
-            transform: scale(1.01);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-input-wrapper i {
+            position: absolute;
+            right: 15px;
+            color: #95a5a6;
+            font-size: 18px;
+        }
+
+        .search-input-wrapper input {
+            width: 100%;
+            padding: 12px 45px 12px 15px;
+            border: 1px solid #dcdde1;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .search-input-wrapper input:focus {
+            border-color: #3498db;
+        }
+
+        .search-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 0 30px;
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .search-btn:hover {
+            background-color: #2980b9;
+        }
+
+        .query-metadata {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 5px;
+            flex-wrap: wrap;
+        }
+
+        .meta-tag {
+            background: #e8f4f8;
+            color: #2980b9;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .results-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .result-card {
+            background: #fff;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            box-shadow: var(--card-shadow);
+            border-right: 4px solid #3498db;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px dashed #f1f2f6;
+            padding-bottom: 8px;
+        }
+
+        .doc-id {
+            font-weight: 700;
+            color: var(--primary-color);
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .doc-score {
+            background-color: #2ecc71;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        /* تنسيق عنوان النتيجة في الكرت */
+        .doc-content h3 {
+            color: var(--primary-color);
+            font-size: 16px;
+            margin-bottom: 15px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .view-doc-btn {
+            background-color: #f1f2f6;
+            color: #2c3e50;
+            border: 1px solid #ced6e0;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .view-doc-btn:hover {
+            background-color: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+
+        /* --- تنسيقات النافذة المنبثقة (Modal) وداخلها --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content-box {
+            background: #fff;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 20px;
+            background: var(--primary-color);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            font-size: 18px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #ecf0f1;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close-btn:hover {
+            color: #e74c3c;
+        }
+
+        .modal-body {
+            padding: 25px;
+            overflow-y: auto;
+            line-height: 1.8;
+            color: #444;
+            font-size: 15px;
+            text-align: right;
+            direction: rtl;
+            /* إذا كان محتوى المستند انجليزي يمكنك تغييرها لـ ltr */
+        }
+
+        /* تنسيق أقسام المستند داخل النافذة المنبثقة */
+        .doc-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #f1f2f6;
+        }
+
+        .doc-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .doc-section h4 {
+            color: #2980b9;
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .doc-section p {
+            color: #555;
+            text-align: justify;
+            direction: ltr;
+            /* يفترض أن النص الطبي بالإنجليزي */
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #bdc3c7;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="container py-5">
-        <h1 class="text-center mb-4 text-primary fw-bold">🔎 محرك البحث المتقدم</h1>
-
-        <div class="card search-card p-4 mb-4 bg-white">
-            <form method="POST" action="/">
-
-                <div class="row g-3 mb-4">
-                    <div class="col-md-10">
-                        <input type="text" name="query" class="form-control form-control-lg"
-                            placeholder="أدخل نص الاستعلام هنا..." value="{{ query }}" required>
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary btn-lg w-100">ابحث الآن</button>
-                    </div>
-                </div>
-
-                <h5 class="text-secondary border-bottom pb-2 mb-3">⚙️ خيارات ومحددات البحث</h5>
-
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">مجموعة البيانات (Dataset):</label>
-                        <select name="dataset" class="form-select">
-                            <option value="dataset_1" {% if selected_dataset=='dataset_1' %}selected{% endif %}>MS MARCO
-                                (الأساسية)</option>
-                            <option value="dataset_2" {% if selected_dataset=='dataset_2' %}selected{% endif %}>مجموعة
-                                البيانات الإضافية</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">نمط التنفيذ:</label>
-                        <select name="execution_mode" class="form-select">
-                            <option value="basic" {% if execution_mode=='basic' %}selected{% endif %}>الطلبات الأساسية
-                                فقط</option>
-                            <option value="advanced" {% if execution_mode=='advanced' %}selected{% endif %}>الطلبات
-                                الأساسية + الإضافية</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">التمثيل الهجين (Hybrid):</label>
-                        <select name="hybrid_model" class="form-select">
-                            <option value="none" {% if hybrid_model=='none' %}selected{% endif %}>تعطيل التمثيل الهجين
-                            </option>
-                            <option value="dense_sparse" {% if hybrid_model=='dense_sparse' %}selected{% endif %}>Dense
-                                + Sparse (Parallel)</option>
-                            <option value="serial_hybrid" {% if hybrid_model=='serial_hybrid' %}selected{% endif %}>
-                                التمثيل التسلسلي (Serial)</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">معاملات BM25 لمطابقة الاستعلام:</label>
-                        <div class="input-group mb-2">
-                            <span class="input-group-text">k1</span>
-                            <input type="number" step="0.1" name="bm25_k1" class="form-control" value="{{ bm25_k1 }}">
-                            <span class="input-group-text">b</span>
-                            <input type="number" step="0.05" name="bm25_b" class="form-control" value="{{ bm25_b }}">
-                        </div>
-                    </div>
-                </div>
-
-            </form>
-        </div>
-
-        <div class="results-section">
-            <h3 class="mb-3 text-dark">📋 النتائج المسترجعة ومخرجات النظام</h3>
-
-            {% if results %}
-            {% if results.error %}
-            <div class="alert alert-danger">{{ results.error }}</div>
-            {% else %}
-            <div class="alert alert-success py-2">
-                🔄 <b>الاستعلام الأصلي:</b> {{ results.get('original_query', query) }} <br>
-                ✨ <b>الاستعلام بعد التعديل (Refined):</b> {{ results.get('refined_query', 'لم يتم التعديل') }}
+    <div class="modal-overlay" id="docModal">
+        <div class="modal-content-box">
+            <div class="modal-header">
+                <h3 id="modalTitle"><i class="fa-solid fa-file-lines"></i> تفاصيل المستند</h3>
+                <button class="close-btn" onclick="closeModal()" type="button"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
-
-            {% if results.get('final_results') %}
-            {% for doc in results.final_results %}
-            <div class="p-3 mb-3 result-item shadow-sm">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="badge bg-secondary">معرّف الوثيقة: {{ doc[0] }}</span>
-                    <span class="badge bg-primary">درجة الملاءمة (Score): {{ "%.4f"|format(doc[1]) }}</span>
-                </div>
-                <p class="mb-0 text-muted">
-                    {{ doc[2] if doc|length > 2 else "محتوى الوثيقة متوفر في قاعدة البيانات ومسترجع بناءً على الفهرسة
-                    المقلوبة وعمليات المطابقة." }}
-                </p>
+            <div class="modal-body" id="modalBodyText">
             </div>
-            {% endfor %}
-            {% else %}
-            <div class="alert alert-warning">لم يتم العثور على وثائق مطابقة لهذا الاستعلام.</div>
-            {% endif %}
-            {% endif %}
-            {% else %}
-            <div class="text-center text-muted py-5 border bg-white rounded-3">
-                <p class="fs-5 mb-0">أدخل استعلاماً واضغط على زر البحث لعرض النتائج هنا.</p>
-            </div>
-            {% endif %}
         </div>
     </div>
 
+    <form id="search-form" method="POST" action="/" style="display: flex; width: 100%; height: 100%;">
+
+        <div class="sidebar">
+            <h2><i class="fa-solid fa-sliders"></i> لوحة التحكم والتحسين</h2>
+
+            <div class="form-group">
+                <label for="dataset"><i class="fa-solid fa-database"></i> مجموعة البيانات (Dataset)</label>
+                <select name="dataset" id="dataset">
+                    <option value="clinicaltrials_pm" {% if selected_dataset=='clinicaltrials_pm' %}selected{% endif %}>
+                        ClinicalTrials PM</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="model"><i class="fa-solid fa-brain"></i> موديل الاسترجاع والتمثيل</label>
+                <select name="model" id="model" onchange="toggleModelParams()">
+                    <option value="bm25" {% if selected_model=='bm25' %}selected{% endif %}>BM25 Model</option>
+                    <option value="tfidf" {% if selected_model=='tfidf' %}selected{% endif %}>VSM (TF-IDF)</option>
+                    <option value="hybrid_parallel" {% if selected_model=='hybrid_parallel' %}selected{% endif %}>Hybrid
+                        Parallel</option>
+                    <option value="hybrid_serial" {% if selected_model=='hybrid_serial' %}selected{% endif %}>Hybrid
+                        Serial</option>
+                </select>
+            </div>
+
+            <div id="bm25-params-group" class="form-group" style="display: none;">
+                <label><i class="fa-solid fa-gears"></i> معاملات الـ BM25</label>
+                <div class="param-sub-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; color:#bdc3c7;">المعامل k1:</span>
+                        <input type="number" name="bm25_k1" step="0.1" value="{{ bm25_k1 }}"
+                            style="width: 70px; padding: 5px;">
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; color:#bdc3c7;">المعامل b:</span>
+                        <input type="number" name="bm25_b" step="0.05" value="{{ bm25_b }}"
+                            style="width: 70px; padding: 5px;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: auto;">
+                <label for="top_k"><i class="fa-solid fa-list-ol"></i> عدد النتائج المسترجعة (Top K)</label>
+                <input type="number" id="top_k" name="top_k" min="1" max="100" value="{{ top_k }}">
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="top-navbar">
+                <div class="nav-title">
+                    <h1>محرك البحث الطبي الذكي</h1>
+                </div>
+                <div class="nav-links">
+                    <a href="/evaluation"><i class="fa-solid fa-chart-line"></i>لوحة تقييم النظام وعرض المقاييس</a>
+                </div>
+            </div>
+
+            <div class="search-area-wrapper">
+
+                <div class="search-bar-container">
+                    <div class="search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass-chart"></i>
+                        <input type="text" name="query" placeholder="أدخل استعلامك الطبي باللغة الطبيعية هنا..."
+                            value="{{ query }}" required>
+                    </div>
+                    <button type="submit" class="search-btn">
+                        <span>ابحث الآن</span>
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+
+                <div class="results-container" id="results-wrapper">
+
+                    <div id="loading-state"
+                        style="display: none; text-align: center; padding: 40px; color: #27ae60; background: #eafaf1; border-radius: var(--border-radius); border: 2px solid #2ecc71;">
+                        <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 48px; margin-bottom: 15px;"></i>
+                        <p style="font-size: 18px; font-weight: bold;">يتم الآن البحث ومعالجة البيانات، يرجى الانتظار...
+                        </p>
+                    </div>
+
+                    <div id="actual-results" style="display: flex; flex-direction: column; gap: 15px;">
+                        {% if results and results.get('final_results') %}
+
+                        <div class="query-metadata" id="query-meta-area">
+                            <div class="meta-tag"><i class="fa-solid fa-arrow-right-to-bracket"></i> الاستعلام الأصلي:
+                                <span>{{ results.get('original_query', query) }}</span></div>
+                            <div class="meta-tag" style="background: #eafaf1; color: #27ae60;"><i
+                                    class="fa-solid fa-sparkles"></i> بعد التحسين (Refined): <span>{{
+                                    results.get('refined_query', '') }}</span></div>
+                        </div>
+
+                        {% for doc in results['final_results'] %}
+                        <div class="result-card">
+                            <div class="result-header">
+                                <span class="doc-id"><i class="fa-solid fa-file-medical"></i> ID المستند: {{ doc[0]
+                                    }}</span>
+                                <span class="doc-score">درجة المطابقة (Score): {{ "%.4f"|format(doc[1]) }}</span>
+                            </div>
+
+                            <div class="doc-content">
+
+                                {% set doc_data = results.get('documents_text', {}).get(doc[0], {}) %}
+                                {% if not doc_data %}
+                                {% set doc_data = results.get('documents_data', {}).get(doc[0], {}) %}
+                                {% endif %}
+
+                                <h3>{{ doc_data.get('title', 'عنوان المستند غير متوفر') }}</h3>
+
+                                <div id="full-text-{{ doc[0] }}" style="display: none;">
+                                    <div class="doc-section">
+                                        <h4><i class="fa-solid fa-heading"></i> العنوان (Title)</h4>
+                                        <p>{{ doc_data.get('title', 'غير متوفر') }}</p>
+                                    </div>
+                                    <div class="doc-section">
+                                        <h4><i class="fa-solid fa-align-left"></i> الملخص (Summary)</h4>
+                                        <p>{{ doc_data.get('summary', 'غير متوفر') }}</p>
+                                    </div>
+                                    <div class="doc-section">
+                                        <h4><i class="fa-solid fa-file-medical-alt"></i> الوصف التفصيلي (Detailed
+                                            Description)</h4>
+                                        <p>{{ doc_data.get('detailed_description', 'غير متوفر') }}</p>
+                                    </div>
+                                    <div class="doc-section">
+                                        <h4><i class="fa-solid fa-clipboard-check"></i> معايير الأهلية (Eligibility)
+                                        </h4>
+                                        <p>{{ doc_data.get('eligibility', 'غير متوفر') }}</p>
+                                    </div>
+                                </div>
+
+                                <button type="button" class="view-doc-btn" onclick="openModal('{{ doc[0] }}')">
+                                    <i class="fa-solid fa-expand"></i> عرض المستند بالكامل
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        {% elif results and results.get('error') %}
+                        <div
+                            style="text-align: center; padding: 25px; color: var(--accent-color); background: white; border-radius: var(--border-radius);">
+                            <i class="fa-solid fa-circle-exclamation" style="font-size: 40px; margin-bottom: 10px;"></i>
+                            <p>{{ results['error'] }}</p>
+                        </div>
+                        {% else %}
+                        <div
+                            style="text-align: center; padding: 40px; color: #7f8c8d; background: white; border-radius: var(--border-radius);">
+                            <i class="fa-solid fa-folder-open"
+                                style="font-size: 48px; margin-bottom: 15px; color: #bdc3c7;"></i>
+                            <p>قم بكتابة استعلامك واضغط على زر البحث لعرض المستندات.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </form>
+
+    <script>
+        function toggleModelParams() {
+            var modelSelect = document.getElementById("model");
+            var bm25Params = document.getElementById("bm25-params-group");
+            if (modelSelect && bm25Params) {
+                if (modelSelect.value === "bm25" || modelSelect.value.includes("hybrid")) {
+                    bm25Params.style.display = "flex";
+                } else {
+                    bm25Params.style.display = "none";
+                }
+            }
+        }
+        window.onload = toggleModelParams;
+
+        document.getElementById('search-form').addEventListener('submit', function () {
+            document.getElementById('actual-results').style.display = 'none';
+            document.getElementById('loading-state').style.display = 'block';
+        });
+
+        function openModal(docId) {
+            var fullTextHtml = document.getElementById('full-text-' + docId).innerHTML;
+            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-file-lines"></i> تفاصيل المستند رقم: ' + docId;
+            document.getElementById('modalBodyText').innerHTML = fullTextHtml;
+            document.getElementById('docModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('docModal').style.display = 'none';
+        }
+
+        window.onclick = function (event) {
+            var modal = document.getElementById('docModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+    </script>
 </body>
 
 </html>

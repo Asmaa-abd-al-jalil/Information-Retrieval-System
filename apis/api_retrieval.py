@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import requests 
+from services.data_service import get_full_document_data
 from services.retrieval_service import retrieve
 
 app = FastAPI()
@@ -20,6 +21,13 @@ def get_results(request: RetrievalRequest):
     clean_query = preprocessed.get('final_text', request.query)
     
     results = retrieve(clean_query, top_k=request.top_k)
-    return {"query": request.query, "results": results}
-
+    documents_data = {}
+    for doc_id, score in results:
+        documents_data[doc_id] = get_full_document_data(doc_id)
+    
+    return {
+        "query": request.query, 
+        "final_results": results, 
+        "documents_text": documents_data
+    }
 #  uvicorn apis.api_retrieval:app --port 8002 --reload
