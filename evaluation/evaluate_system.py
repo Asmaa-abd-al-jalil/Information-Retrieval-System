@@ -16,10 +16,7 @@ from services.retrieval_service import (
 
 os.environ['IR_DATASETS_HOME'] = r"D:\ir_storage"
 
-# =========================
-# GLOBAL CACHE
-# =========================
-# cache key = (model_name, query_text)
+
 _QUERY_CACHE = {}
 
 

@@ -35,10 +35,10 @@ _doc_embedding_cache = None
 _doc_embedding_ids = None
 BM25_CACHE_PATH = "data/indexes/bm25.pkl"
 TFIDF_CACHE_PATH = "data/indexes/tfidf.pkl"
-
+EMBEDDINGS_CACHE_PATH = "data/indexes/doc_embeddings.pkl"
 _cluster_service = ClusteringService(n_clusters=3)
 # ======================================================
-# DOC CACHE (CRITICAL FIX)
+# DOC CACHE 
 # ======================================================
 def load_docs():
     global _docs_cache
@@ -60,40 +60,89 @@ def get_embedding_model():
 
 
 # ======================================================
-# TF-IDF (FIXED - NO RELOAD EVERY CALL)
+# TF-IDF 
 # ======================================================
-def compute_tfidf_scores(query: str, inverted_index: dict, doc_lengths: dict, doc_count: int):
+def compute_tfidf_scores(query, inverted_index, doc_lengths, doc_count):
 
+    vectorizer, doc_matrix, doc_ids = get_tfidf_model()
+
+    query_text = preprocess_text(query)['final_text']
+
+    query_vec = vectorizer.transform([query_text])
+
+    scores = cosine_similarity(
+        query_vec,
+        doc_matrix
+    ).flatten()
+
+    return sorted(
+        zip(doc_ids, scores),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+def get_tfidf_model():
     global _tfidf_vectorizer, _tfidf_doc_matrix, _tfidf_doc_ids
 
+    if _tfidf_vectorizer is not None:
+        return _tfidf_vectorizer, _tfidf_doc_matrix, _tfidf_doc_ids
+
+    if os.path.exists(TFIDF_CACHE_PATH):
+
+        print("[TFIDF] Loading cached model...")
+
+        with open(TFIDF_CACHE_PATH, "rb") as f:
+            (
+                _tfidf_vectorizer,
+                _tfidf_doc_matrix,
+                _tfidf_doc_ids
+            ) = pickle.load(f)
+
+        return (
+            _tfidf_vectorizer,
+            _tfidf_doc_matrix,
+            _tfidf_doc_ids
+        )
+
+    print("[TFIDF] Building model once...")
+
     docs = load_docs()
-    if not docs:
-        return []
 
-    if _tfidf_vectorizer is None:
+    _tfidf_doc_ids = list(docs.keys())
 
-        print("[TFIDF] Building model once...")
+    corpus = [
+        preprocess_text(text)['final_text']
+        for text in docs.values()
+    ]
 
-        _tfidf_doc_ids = list(docs.keys())
+    _tfidf_vectorizer = TfidfVectorizer()
 
-        corpus = [
-            preprocess_text(text)['final_text']
-            for text in docs.values()
-        ]
+    _tfidf_doc_matrix = _tfidf_vectorizer.fit_transform(corpus)
 
-        _tfidf_vectorizer = TfidfVectorizer()
-        _tfidf_doc_matrix = _tfidf_vectorizer.fit_transform(corpus)
+    os.makedirs("data/indexes", exist_ok=True)
 
-    q = preprocess_text(query)['final_text']
-    q_vec = _tfidf_vectorizer.transform([q])
+    with open(TFIDF_CACHE_PATH, "wb") as f:
+        pickle.dump(
+            (
+                _tfidf_vectorizer,
+                _tfidf_doc_matrix,
+                _tfidf_doc_ids
+            ),
+            f
+        )
 
-    scores = cosine_similarity(q_vec, _tfidf_doc_matrix).flatten()
+    return (
+        _tfidf_vectorizer,
+        _tfidf_doc_matrix,
+        _tfidf_doc_ids
+    )
 
-    return sorted(zip(_tfidf_doc_ids, scores), key=lambda x: x[1], reverse=True)
+    
+
 
 
 # ======================================================
-# BM25 (CACHED + SAFE)
+# BM25 
 # ======================================================
 def compute_bm25_scores(query, inverted_index, doc_lengths, doc_count):
 
@@ -131,37 +180,76 @@ def compute_bm25_scores(query, inverted_index, doc_lengths, doc_count):
 
 
 # ======================================================
-# EMBEDDINGS (OPTIMIZED)
+# EMBEDDINGS 
 # ======================================================
-def compute_embedding_scores(original_query, doc_texts, top_k=10):
+_doc_embedding_cache = None
 
-    global _doc_embedding_cache, _doc_embedding_ids
+def load_doc_embeddings(doc_texts):
+
+    global _doc_embedding_cache
+
+    if _doc_embedding_cache is not None:
+        return _doc_embedding_cache
+
+    if os.path.exists(EMBEDDINGS_CACHE_PATH):
+
+        print("[BERT] Loading cached embeddings...")
+
+        with open(EMBEDDINGS_CACHE_PATH, "rb") as f:
+            _doc_embedding_cache = pickle.load(f)
+
+        return _doc_embedding_cache
+
+    print("[BERT] Building embeddings once...")
 
     model = get_embedding_model()
 
-    q_vec = model.encode(original_query, convert_to_numpy=True)
+    _doc_embedding_cache = {}
 
-    doc_ids = list(doc_texts.keys())
-
-    if _doc_embedding_cache is None or _doc_embedding_ids != doc_ids:
-
-        print("[BERT] Encoding docs once...")
-
-        _doc_embedding_cache = model.encode(
-            list(doc_texts.values()),
-            convert_to_numpy=True,
-            show_progress_bar=False
+    for doc_id, text in doc_texts.items():
+        _doc_embedding_cache[doc_id] = model.encode(
+            text,
+            convert_to_numpy=True
         )
 
-        _doc_embedding_ids = doc_ids
+    os.makedirs("data/indexes", exist_ok=True)
 
-    sims = cosine_similarity([q_vec], _doc_embedding_cache).flatten()
+    with open(EMBEDDINGS_CACHE_PATH, "wb") as f:
+        pickle.dump(_doc_embedding_cache, f)
 
-    return sorted(zip(doc_ids, sims), key=lambda x: x[1], reverse=True)[:top_k]
+    return _doc_embedding_cache
+
+def compute_embedding_scores(query, doc_texts, top_k=10):
+
+    model = get_embedding_model()
+
+    query_vec = model.encode(query, convert_to_numpy=True)
+
+    embeddings = load_doc_embeddings(doc_texts)
+
+    scores = []
+
+    for doc_id, text in doc_texts.items():
+
+        if doc_id not in embeddings:
+            continue
+
+        sim = cosine_similarity(
+            query_vec.reshape(1, -1),
+            embeddings[doc_id].reshape(1, -1)
+        )[0][0]
+
+        scores.append((doc_id, float(sim)))
+
+    return sorted(
+        scores,
+        key=lambda x: x[1],
+        reverse=True
+    )[:top_k]
 
 
 # ======================================================
-# HYBRID (UNCHANGED STRUCTURE)
+# HYBRID 
 # ======================================================
 def hybrid_serial(original_query, doc_texts, top_k=10):
 
@@ -170,7 +258,8 @@ def hybrid_serial(original_query, doc_texts, top_k=10):
     bm25_results = compute_bm25_scores(original_query, inverted_index, doc_lengths, doc_count)
 
     top_50 = [d for d, _ in bm25_results[:50]]
-
+    if doc_texts is None:
+     doc_texts = load_docs()
     filtered = {d: doc_texts[d] for d in top_50 if d in doc_texts}
 
     return compute_embedding_scores(original_query, filtered, top_k)
@@ -186,7 +275,8 @@ def hybrid_parallel(original_query, doc_texts, top_k=10, fusion_method="rrf", we
     bm25_results = compute_bm25_scores(original_query, inverted_index, doc_lengths, doc_count)
 
     top_ids = [d for d, _ in bm25_results[:300]]
-
+    if doc_texts is None:
+     doc_texts = load_docs()
     filtered = {d: doc_texts[d] for d in top_ids if d in doc_texts}
 
     tfidf_results = compute_tfidf_scores(original_query, inverted_index, doc_lengths, doc_count)
@@ -202,7 +292,7 @@ def hybrid_parallel(original_query, doc_texts, top_k=10, fusion_method="rrf", we
 
 
 # ======================================================
-# FUSION (UNCHANGED)
+# FUSION 
 # ======================================================
 def _rrf(*args, top_k, k=60):
     scores = defaultdict(float)
