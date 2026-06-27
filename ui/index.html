@@ -36,6 +36,7 @@
             color: #333;
         }
 
+        /* --- تنسيقات السايدبار وباقي الصفحة --- */
         .sidebar {
             width: var(--sidebar-width);
             background-color: var(--primary-color);
@@ -265,25 +266,167 @@
             font-weight: 600;
         }
 
-        .doc-content {
-            font-size: 14px;
-            color: #555;
-            line-height: 1.7;
-            text-align: justify;
+        /* تنسيق عنوان النتيجة في الكرت */
+        .doc-content h3 {
+            color: var(--primary-color);
+            font-size: 16px;
+            margin-bottom: 15px;
+            font-weight: 700;
+            line-height: 1.4;
         }
 
-        .doc-content strong {
-            color: #7f8c8d;
-            display: block;
-            margin-bottom: 5px;
-            font-size: 12px;
+        .view-doc-btn {
+            background-color: #f1f2f6;
+            color: #2c3e50;
+            border: 1px solid #ced6e0;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .view-doc-btn:hover {
+            background-color: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+
+        /* --- تنسيقات النافذة المنبثقة (Modal) وداخلها --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content-box {
+            background: #fff;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 20px;
+            background: var(--primary-color);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            font-size: 18px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #ecf0f1;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close-btn:hover {
+            color: #e74c3c;
+        }
+
+        .modal-body {
+            padding: 25px;
+            overflow-y: auto;
+            line-height: 1.8;
+            color: #444;
+            font-size: 15px;
+            text-align: right;
+            direction: rtl;
+            /* إذا كان محتوى المستند انجليزي يمكنك تغييرها لـ ltr */
+        }
+
+        /* تنسيق أقسام المستند داخل النافذة المنبثقة */
+        .doc-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #f1f2f6;
+        }
+
+        .doc-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .doc-section h4 {
+            color: #2980b9;
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .doc-section p {
+            color: #555;
+            text-align: justify;
+            direction: ltr;
+            /* يفترض أن النص الطبي بالإنجليزي */
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #bdc3c7;
         }
     </style>
 </head>
 
 <body>
 
-    <form method="POST" action="/" style="display: flex; width: 100%; height: 100%;">
+    <div class="modal-overlay" id="docModal">
+        <div class="modal-content-box">
+            <div class="modal-header">
+                <h3 id="modalTitle"><i class="fa-solid fa-file-lines"></i> تفاصيل المستند</h3>
+                <button class="close-btn" onclick="closeModal()" type="button"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" id="modalBodyText">
+            </div>
+        </div>
+    </div>
+
+    <form id="search-form" method="POST" action="/" style="display: flex; width: 100%; height: 100%;">
 
         <div class="sidebar">
             <h2><i class="fa-solid fa-sliders"></i> لوحة التحكم والتحسين</h2>
@@ -292,9 +435,7 @@
                 <label for="dataset"><i class="fa-solid fa-database"></i> مجموعة البيانات (Dataset)</label>
                 <select name="dataset" id="dataset">
                     <option value="clinicaltrials_pm" {% if selected_dataset=='clinicaltrials_pm' %}selected{% endif %}>
-                        ClinicalTrials PM (الأصلية)</option>
-                    <option value="dataset_2" {% if selected_dataset=='dataset_2' %}selected{% endif %}>مجموعة البيانات
-                        الثانية</option>
+                        ClinicalTrials PM</option>
                 </select>
             </div>
 
@@ -304,9 +445,9 @@
                     <option value="bm25" {% if selected_model=='bm25' %}selected{% endif %}>BM25 Model</option>
                     <option value="tfidf" {% if selected_model=='tfidf' %}selected{% endif %}>VSM (TF-IDF)</option>
                     <option value="hybrid_parallel" {% if selected_model=='hybrid_parallel' %}selected{% endif %}>Hybrid
-                        Parallel (التجميع المتوازي)</option>
+                        Parallel</option>
                     <option value="hybrid_serial" {% if selected_model=='hybrid_serial' %}selected{% endif %}>Hybrid
-                        Serial (التصفية التسلسلية)</option>
+                        Serial</option>
                 </select>
             </div>
 
@@ -326,43 +467,6 @@
                 </div>
             </div>
 
-            <div id="hybrid-params-group" class="form-group" style="display: none;">
-                <label><i class="fa-solid fa-network-wired"></i> إعدادات الدمج (Parallel Fusion)</label>
-                <div class="param-sub-group">
-                    <div style="display:flex; flex-direction:column; gap:5px; margin-bottom: 5px;">
-                        <span style="font-size:12px; color:#bdc3c7;">خوارزمية الدمج:</span>
-                        <select name="fusion_method" style="padding: 5px;">
-                            <option value="rrf" {% if fusion_method=='rrf' %}selected{% endif %}>Reciprocal Rank Fusion
-                                (RRF)</option>
-                            <option value="w_sum" {% if fusion_method=='w_sum' %}selected{% endif %}>Weighted Score Sum
-                            </option>
-                        </select>
-                    </div>
-                    <span style="font-size:12px; color:#2ecc71; font-weight:bold; margin-top:5px;">أوزان الموديلات (في
-                        حال اختيار Sum):</span>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:11px; color:#bdc3c7;">وزن TF-IDF:</span>
-                        <input type="number" name="w_tfidf" step="0.05" value="{{ w_tfidf }}"
-                            style="width: 65px; padding: 4px;">
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:11px; color:#bdc3c7;">وزن BM25:</span>
-                        <input type="number" name="w_bm25" step="0.05" value="{{ w_bm25 }}"
-                            style="width: 65px; padding: 4px;">
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:11px; color:#bdc3c7;">وزن BERT:</span>
-                        <input type="number" name="w_bert" step="0.05" value="{{ w_bert }}"
-                            style="width: 65px; padding: 4px;">
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:11px; color:#bdc3c7;">وزن Word2Vec:</span>
-                        <input type="number" name="w_w2v" step="0.05" value="{{ w_w2v }}"
-                            style="width: 65px; padding: 4px;">
-                    </div>
-                </div>
-            </div>
-
             <div class="form-group" style="margin-top: auto;">
                 <label for="top_k"><i class="fa-solid fa-list-ol"></i> عدد النتائج المسترجعة (Top K)</label>
                 <input type="number" id="top_k" name="top_k" min="1" max="100" value="{{ top_k }}">
@@ -375,7 +479,7 @@
                     <h1>محرك البحث الطبي الذكي</h1>
                 </div>
                 <div class="nav-links">
-                    <a href="/evaluation"><i class="fa-solid fa-chart-line"></i> لوحة تقييم النظام وعرض المقاييس</a>
+                    <a href="/evaluation"><i class="fa-solid fa-chart-line"></i>لوحة تقييم النظام وعرض المقاييس</a>
                 </div>
             </div>
 
@@ -384,8 +488,7 @@
                 <div class="search-bar-container">
                     <div class="search-input-wrapper">
                         <i class="fa-solid fa-magnifying-glass-chart"></i>
-                        <input type="text" name="query"
-                            placeholder="أدخل استعلامك الطبي باللغة الطبيعية هنا (مثال: cancer treatment clinical trial)..."
+                        <input type="text" name="query" placeholder="أدخل استعلامك الطبي باللغة الطبيعية هنا..."
                             value="{{ query }}" required>
                     </div>
                     <button type="submit" class="search-btn">
@@ -395,46 +498,85 @@
                 </div>
 
                 <div class="results-container" id="results-wrapper">
-                    {% if results and results.get('final_results') %}
 
-                    <div class="query-metadata" id="query-meta-area">
-                        <div class="meta-tag"><i class="fa-solid fa-arrow-right-to-bracket"></i> الاستعلام الأصلي:
-                            <span>{{ results.get('original_query', query) }}</span></div>
-                        <div class="meta-tag" style="background: #eafaf1; color: #27ae60;"><i
-                                class="fa-solid fa-sparkles"></i> بعد التحسين (Refined): <span>{{
-                                results.get('refined_query', '') }}</span></div>
+                    <div id="loading-state"
+                        style="display: none; text-align: center; padding: 40px; color: #27ae60; background: #eafaf1; border-radius: var(--border-radius); border: 2px solid #2ecc71;">
+                        <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 48px; margin-bottom: 15px;"></i>
+                        <p style="font-size: 18px; font-weight: bold;">يتم الآن البحث ومعالجة البيانات، يرجى الانتظار...
+                        </p>
                     </div>
 
-                    {% for doc in results['final_results'] %}
-                    <div class="result-card">
-                        <div class="result-header">
-                            <span class="doc-id"><i class="fa-solid fa-file-medical"></i> ID المستند: {{ doc[0]
-                                }}</span>
-                            <span class="doc-score">درجة المطابقة (Score): {{ "%.4f"|format(doc[1]) }}</span>
+                    <div id="actual-results" style="display: flex; flex-direction: column; gap: 15px;">
+                        {% if results and results.get('final_results') %}
+
+                        <div class="query-metadata" id="query-meta-area">
+                            <div class="meta-tag"><i class="fa-solid fa-arrow-right-to-bracket"></i> الاستعلام الأصلي:
+                                <span>{{ results.get('original_query', query) }}</span></div>
+                            <div class="meta-tag" style="background: #eafaf1; color: #27ae60;"><i
+                                    class="fa-solid fa-sparkles"></i> بعد التحسين (Refined): <span>{{
+                                    results.get('refined_query', '') }}</span></div>
                         </div>
-                        <div class="doc-content">
-                            <strong>نص المستند الاصلي كامل (مسترجع من الـ Database المشتركة):</strong>
-                            {{ results.get('documents_text', {}).get(doc[0], 'تم استرجاع النص الأصلي بالكامل من جدول الـ
-                            documents في قاعدة البيانات للـ ID المحدد بنجاح.') }}
-                        </div>
-                    </div>
-                    {% endfor %}
 
-                    {% elif results and results.get('error') %}
-                    <div
-                        style="text-align: center; padding: 25px; color: var(--accent-color); background: white; border-radius: var(--border-radius);">
-                        <i class="fa-solid fa-circle-exclamation" style="font-size: 40px; margin-bottom: 10px;"></i>
-                        <p>{{ results['error'] }}</p>
+                        {% for doc in results['final_results'] %}
+                        <div class="result-card">
+                            <div class="result-header">
+                                <span class="doc-id"><i class="fa-solid fa-file-medical"></i> ID المستند: {{ doc[0]
+                                    }}</span>
+                                <span class="doc-score">درجة المطابقة (Score): {{ "%.4f"|format(doc[1]) }}</span>
+                            </div>
+
+                            <div class="doc-content">
+
+                                {% set doc_data = results.get('documents_text', {}).get(doc[0], {}) %}
+                                {% if not doc_data %}
+                                {% set doc_data = results.get('documents_data', {}).get(doc[0], {}) %}
+                                {% endif %}
+
+                                <h3>{{ doc_data.get('title', 'عنوان المستند غير متوفر') }}</h3>
+
+                                <div id="full-text-{{ doc[0] }}" style="display: none;">
+                                    <div class="doc-section">
+                                        <h4><i class="fa-solid fa-heading"></i> العنوان (Title)</h4>
+                                        <p>{{ doc_data.get('title', 'غير متوفر') }}</p>
+                                    </div>
+                                    <div class="doc-section">
+                                        <h4><i class="fa-solid fa-align-left"></i> الملخص (Summary)</h4>
+                                        <p>{{ doc_data.get('summary', 'غير متوفر') }}</p>
+                                    </div>
+                                    <div class="doc-section">
+                                        <h4><i class="fa-solid fa-file-medical-alt"></i> الوصف التفصيلي (Detailed
+                                            Description)</h4>
+                                        <p>{{ doc_data.get('detailed_description', 'غير متوفر') }}</p>
+                                    </div>
+                                    <div class="doc-section">
+                                        <h4><i class="fa-solid fa-clipboard-check"></i> معايير الأهلية (Eligibility)
+                                        </h4>
+                                        <p>{{ doc_data.get('eligibility', 'غير متوفر') }}</p>
+                                    </div>
+                                </div>
+
+                                <button type="button" class="view-doc-btn" onclick="openModal('{{ doc[0] }}')">
+                                    <i class="fa-solid fa-expand"></i> عرض المستند بالكامل
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        {% elif results and results.get('error') %}
+                        <div
+                            style="text-align: center; padding: 25px; color: var(--accent-color); background: white; border-radius: var(--border-radius);">
+                            <i class="fa-solid fa-circle-exclamation" style="font-size: 40px; margin-bottom: 10px;"></i>
+                            <p>{{ results['error'] }}</p>
+                        </div>
+                        {% else %}
+                        <div
+                            style="text-align: center; padding: 40px; color: #7f8c8d; background: white; border-radius: var(--border-radius);">
+                            <i class="fa-solid fa-folder-open"
+                                style="font-size: 48px; margin-bottom: 15px; color: #bdc3c7;"></i>
+                            <p>قم بكتابة استعلامك واضغط على زر البحث لعرض المستندات.</p>
+                        </div>
+                        {% endif %}
                     </div>
-                    {% else %}
-                    <div
-                        style="text-align: center; padding: 40px; color: #7f8c8d; background: white; border-radius: var(--border-radius);">
-                        <i class="fa-solid fa-folder-open"
-                            style="font-size: 48px; margin-bottom: 15px; color: #bdc3c7;"></i>
-                        <p>قم بكتابة استعلامك واضغط على زر البحث لعرض المستندات الأصلية كاملة مع الـ ID وسكور التشابه من
-                            قاعدة البيانات مباشرة.</p>
-                    </div>
-                    {% endif %}
                 </div>
 
             </div>
@@ -445,25 +587,39 @@
     <script>
         function toggleModelParams() {
             var modelSelect = document.getElementById("model");
-            var selectedValue = modelSelect.value;
-
             var bm25Params = document.getElementById("bm25-params-group");
-            var hybridParams = document.getElementById("hybrid-params-group");
-
-            bm25Params.style.display = "none";
-            hybridParams.style.display = "none";
-
-            if (selectedValue === "bm25") {
-                bm25Params.style.display = "flex";
-            } else if (selectedValue === "hybrid_parallel") {
-                bm25Params.style.display = "flex"; 
-                hybridParams.style.display = "flex";
-            } else if (selectedValue === "hybrid_serial") {
-                bm25Params.style.display = "flex";
+            if (modelSelect && bm25Params) {
+                if (modelSelect.value === "bm25" || modelSelect.value.includes("hybrid")) {
+                    bm25Params.style.display = "flex";
+                } else {
+                    bm25Params.style.display = "none";
+                }
             }
         }
-
         window.onload = toggleModelParams;
+
+        document.getElementById('search-form').addEventListener('submit', function () {
+            document.getElementById('actual-results').style.display = 'none';
+            document.getElementById('loading-state').style.display = 'block';
+        });
+
+        function openModal(docId) {
+            var fullTextHtml = document.getElementById('full-text-' + docId).innerHTML;
+            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-file-lines"></i> تفاصيل المستند رقم: ' + docId;
+            document.getElementById('modalBodyText').innerHTML = fullTextHtml;
+            document.getElementById('docModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('docModal').style.display = 'none';
+        }
+
+        window.onclick = function (event) {
+            var modal = document.getElementById('docModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
     </script>
 </body>
 

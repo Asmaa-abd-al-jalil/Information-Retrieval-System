@@ -54,14 +54,16 @@ def search_gateway(request: SearchRequest):
         }
     ).json()
 
-    retrieved_docs = ret_resp["results"]
+    retrieved_docs = ret_resp["final_results"]
+    documents_data = ret_resp["documents_text"]
     retrieved_ids = [doc[0] for doc in retrieved_docs]
 
     rank_resp = requests.post(
         RANKING_URL,
         json={
             "query_tokens": refined_query.split(),
-            "retrieved_doc_ids": retrieved_ids
+            "retrieved_doc_ids": retrieved_ids ,
+            "documents_data": documents_data,
         }
     ).json()
 
@@ -74,7 +76,8 @@ def search_gateway(request: SearchRequest):
             "bert": request.bert_weight,
             "word2vec": request.word2vec_weight
         },
-        "final_results": rank_resp["ranked_results"]
+        "final_results": rank_resp["ranked_results"],
+        "documents_text": documents_data 
     }
 
 

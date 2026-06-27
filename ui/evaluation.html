@@ -135,7 +135,7 @@
         </div>
 
         <div class="chart-card">
-            <h3><i class="fa-solid fa-rocket"></i> تأثير الميزات الإضافية (Query Refinement & Expansion)</h3>
+            <h3><i class="fa-solid fa-rocket"></i> تأثير الميزات الإضافية</h3>
             <div class="chart-container">
                 <canvas id="improvementChart"></canvas>
             </div>
@@ -174,10 +174,10 @@
                 <tr>
                     <td><span class="badge-model" style="background:#e3f2fd; color:#0d47a1;">hybrid_serial</span>
                     </td>
-                    <td>0.2760</td>
-                    <td>0.3540</td>
-                    <td>0.4620</td>
-                    <td>0.5560</td>
+                <td>0.0111</td>
+                <td>0.0139</td>
+                <td>0.0842</td>
+                <td>0.0955</td>
                 </tr>
                 <tr style="background-color: #f0fdf4; font-weight: bold;">
                     <td><span class="badge-model" style="background:#d1fae5; color:#065f46;">Hybrid Parallel</span></td>
@@ -185,6 +185,17 @@
                     <td>0.2141</td>
                     <td>0.3474</td>
                     <td>0.3849</td>
+                </tr>
+                <tr style="background-color:#fff7ed; font-weight:bold;">
+                    <td>
+                        <span class="badge-model" style="background:#fde68a;color:#92400e;">
+                            Hybrid Clustered
+                        </span>
+                    </td>
+                    <td>0.1121</td>
+                    <td>0.1692</td>
+                    <td>0.3105</td>
+                    <td>0.3630</td>
                 </tr>
             </tbody>
         </table>
@@ -195,40 +206,97 @@
         new Chart(ctxMetrics, {
             type: 'bar',
             data: {
-                labels: ['TF-IDF', 'BM25', 'hybrid_serial', 'hybrid_parallel'],
-                datasets: [
+            labels: ['TF-IDF','BM25','hybrid_serial','hybrid_parallel','hybrid_clustered'],
+          datasets: [
                     {
                         label: 'MAP@10',
-                        data: [0.1150, 0.1579, 0.2760, 0.1297],
+                        data: [0.1150, 0.1579, 0.0111, 0.1297, 0.1121],
                         backgroundColor: '#34495e'
                     },
                     {
                         label: 'Precision@10',
-                        data: [0.3053, 0.4263, 0.4620, 0.3474],
+                        data: [0.3053, 0.4263, 0.0842, 0.3474, 0.3105],
                         backgroundColor: '#3498db'
                     },
                     {
                         label: 'nDCG@10',
-                        data: [0.3769, 0.4727, 0.5560, 0.3849],
+                        data: [0.3769, 0.4727, 0.0955, 0.3849, 0.3630],
                         backgroundColor: '#2ecc71'
+                    },
+                    {
+                        label: 'Recall@10',
+                        data: [0.1767, 0.2475, 0.0139, 0.2141, 0.1692],
+                        backgroundColor: '#f39c12'
                     }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false }
         });
 
-        const ctxImp = document.getElementById('improvementChart').getContext('2d');
-        new Chart(ctxImp, {
-            type: 'line',
-            data: {
-                labels: ['المقاييس الأساسية بدون إضافات', 'بعد تطبيق الـ Query Refinement والتصحيح'],
-                datasets: [
-                    { label: 'معدل الـ MAP الكلي للمحرك', data: [0.28, 0.39], borderColor: '#e74c3c', fill: false, tension: 0.1 },
-                    { label: 'معدل الـ nDCG العام للمحرك', data: [0.48, 0.65], borderColor: '#9b59b6', fill: false, tension: 0.1 }
-                ]
+  const ctxImp = document.getElementById('improvementChart').getContext('2d');
+
+    new Chart(ctxImp, {
+        type: 'line',
+        data: {
+            labels: [
+                'Hybrid Parallel',
+                'Hybrid Parallel + Clustering'
+            ],
+            datasets: [
+                {
+                    label: 'MAP@10',
+                    data: [0.1297, 0.1121],
+                    borderColor: '#e74c3c',
+                    backgroundColor: '#e74c3c',
+                    fill: false,
+                    tension: 0.3
+                },
+                {
+                    label: 'Recall@10',
+                    data: [0.2141, 0.1692],
+                    borderColor: '#f39c12',
+                    backgroundColor: '#f39c12',
+                    fill: false,
+                    tension: 0.3
+                },
+                {
+                    label: 'Precision@10',
+                    data: [0.3474, 0.3105],
+                    borderColor: '#3498db',
+                    backgroundColor: '#3498db',
+                    fill: false,
+                    tension: 0.3
+                },
+                {
+                    label: 'nDCG@10',
+                    data: [0.3849, 0.3630],
+                    borderColor: '#2ecc71',
+                    backgroundColor: '#2ecc71',
+                    fill: false,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'التقييم قبل و بعد تطبيق ال Clustering على نموذج Hybrid Parallel',
+                },
+                legend: {
+                    position: 'bottom'
+                }
             },
-            options: { responsive: true, maintainAspectRatio: false }
-        });
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 0.5
+                }
+            }
+        }
+    });
     </script>
 </body>
 

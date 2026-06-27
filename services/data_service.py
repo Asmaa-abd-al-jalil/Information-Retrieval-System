@@ -35,3 +35,15 @@ def count_documents(dataset) -> int:
 
 def get_processed_doc_text(doc):
     return preprocess_text(doc.text)
+
+DOCS_CACHE = {doc.doc_id: doc for doc in get_dataset().docs_iter()}
+def get_full_document_data(doc_id: str):
+    doc = DOCS_CACHE.get(doc_id)
+    if doc:
+            return {
+                "title": doc.title,
+                "summary": doc.summary,
+                "detailed_description": doc.detailed_description,
+                "eligibility": doc.eligibility
+            }
+    return {"title": "غير متوفر", "summary": "غير متوفر", "detailed_description": "غير متوفر", "eligibility": "غير متوفر"}
