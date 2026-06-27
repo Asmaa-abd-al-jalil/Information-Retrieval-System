@@ -4,19 +4,19 @@ import ir_measures
 
 from services.data_service import get_dataset
 from services.index_service import load_index
-
+from services.database_service import get_all_documents
 from services.retrieval_service import (
     compute_bm25_scores,
     compute_tfidf_scores,
     hybrid_parallel,
-    hybrid_serial
+    hybrid_serial,
+    hybrid_clustered
+
 )
 
 os.environ['IR_DATASETS_HOME'] = r"D:\ir_storage"
 
-# =========================
-# GLOBAL CACHE (VERY IMPORTANT)
-# =========================
+
 _QUERY_CACHE = {}
 
 
@@ -51,7 +51,8 @@ def run_evaluation_suite(target_model="bm25"):
     inverted_index, doc_lengths, doc_count = load_index()
 
     print(f"[INFO] docs: {len(doc_lengths)}")
-
+    print(f"[INFO] evaluating model: {target_model}")
+    doc_texts = get_all_documents()
     # =========================
     # HYBRID WEIGHTS
     # =========================
@@ -65,7 +66,7 @@ def run_evaluation_suite(target_model="bm25"):
     run = []
 
     # =========================
-    # MAIN LOOP (FAST MODE)
+    # MAIN LOOP
     # =========================
     for query in ds.queries_iter():
 
@@ -75,16 +76,22 @@ def run_evaluation_suite(target_model="bm25"):
         if not q_text:
             continue
 
-        # -----------------------
-        # CACHE CHECK
-        # -----------------------
-        if q_text in _QUERY_CACHE:
-            results = _QUERY_CACHE[q_text]
+        # ==================================
+        # IMPORTANT FIX:
+        # Cache depends on model + query
+        # ==================================
+        cache_key = (target_model, q_text)
+
+        if cache_key in _QUERY_CACHE:
+            results = _QUERY_CACHE[cache_key]
 
         else:
+
             try:
-                # BM25
+
+                # ---------------- BM25 ----------------
                 if target_model == "bm25":
+
                     results = compute_bm25_scores(
                         q_text,
                         inverted_index,
@@ -92,8 +99,9 @@ def run_evaluation_suite(target_model="bm25"):
                         doc_count
                     )[:10]
 
-                # TFIDF
+                # ---------------- TFIDF ----------------
                 elif target_model == "tfidf":
+
                     results = compute_tfidf_scores(
                         q_text,
                         inverted_index,
@@ -101,30 +109,40 @@ def run_evaluation_suite(target_model="bm25"):
                         doc_count
                     )[:10]
 
-                # HYBRID (parallel is faster)
+                # ---------------- HYBRID PARALLEL ----------------
                 elif target_model in ["hybrid", "hybrid_parallel"]:
+
                     results = hybrid_parallel(
                         q_text,
-                        doc_texts=None,  
+                        doc_texts=None,
                         top_k=10,
                         fusion_method="weighted_sum",
                         weights=optimized_weights
                     )
 
+                # ---------------- HYBRID SERIAL ----------------
                 elif target_model == "hybrid_serial":
+
                     results = hybrid_serial(
                         q_text,
                         doc_texts=None,
                         top_k=10
                     )
+                elif target_model == "hybrid_clustered":
 
+                    results = hybrid_clustered(
+                        q_text,
+                        doc_texts,
+                       top_k=10
+                    )
                 else:
                     results = []
 
-                _QUERY_CACHE[q_text] = results
+                # Save to cache
+                _QUERY_CACHE[cache_key] = results
 
             except Exception as e:
-                print(f"[ERROR] {q_id}: {e}")
+                print(f"[ERROR] Query {q_id}: {e}")
                 continue
 
         # =========================
@@ -152,7 +170,7 @@ def run_evaluation_suite(target_model="bm25"):
     run_df = pd.DataFrame(run)
 
     # =========================
-    # METRICS (NO FILTERING BUG)
+    # METRICS
     # =========================
     metrics = [
         ir_measures.MAP@10,
@@ -167,10 +185,15 @@ def run_evaluation_suite(target_model="bm25"):
         run_df
     )
 
-    final_results = {str(k): float(v) for k, v in results.items()}
+    final_results = {
+        str(k): float(v)
+        for k, v in results.items()
+    }
 
     print("\n===== RESULTS =====")
+
     for k, v in final_results.items():
         print(f"{k}: {v:.4f}")
 
     return final_results
+
