@@ -2,10 +2,13 @@ import requests
 import time
 from bs4 import BeautifulSoup
 
+from services.database_service import insert_documents
+
+
 class CrawlingService:
+
     def __init__(self, delay=2):
         self.delay = delay
-
         self._cache = {}
 
     def crawl(self, url):
@@ -18,17 +21,31 @@ class CrawlingService:
                 'User-Agent': 'MyBot/1.0 (Contact: asmaamh@gmail.com)'
             }
 
-            response = requests.get(url, headers=headers, timeout=15)
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=15
+            )
 
             time.sleep(self.delay)
 
             if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
+
+                soup = BeautifulSoup(
+                    response.text,
+                    'html.parser'
+                )
 
                 text = " ".join([
-                    tag.get_text()
-                    for tag in soup.find_all(['p', 'h1', 'h2', 'h3'])
+                    tag.get_text(strip=True)
+                    for tag in soup.find_all(
+                        ['p', 'h1', 'h2', 'h3']
+                    )
                 ])
+
+                insert_documents({
+                    url: text
+                })
 
                 result = {
                     "url": url,
@@ -36,7 +53,6 @@ class CrawlingService:
                     "status": "success"
                 }
 
-                # Save to cache
                 self._cache[url] = result
 
                 return result
@@ -47,7 +63,6 @@ class CrawlingService:
                 "error": f"HTTP {response.status_code}"
             }
 
-            # Save failed result too
             self._cache[url] = result
 
             return result
@@ -60,7 +75,6 @@ class CrawlingService:
                 "error": str(e)
             }
 
-            # Save exception result
             self._cache[url] = result
 
             return result

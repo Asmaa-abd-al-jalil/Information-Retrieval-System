@@ -17,4 +17,4 @@ def correct_query(query):
         else:
             corrected_words.append(word)
 
-    return " ".join(corrected_words)
+    return " ".join(corrected_words)    
